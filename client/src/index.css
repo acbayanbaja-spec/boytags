@@ -1,0 +1,73 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+@theme {
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --color-ink: #1c1410;
+  --color-muted: #6d5e52;
+  --color-line: #eadfce;
+  --color-cream: #f6f0e8;
+  --color-paper: #fffbf5;
+  --color-roast: #c2410c;
+  --color-roast-deep: #9a3412;
+  --color-gold: #b8860b;
+  --color-leaf: #3f6212;
+  --color-leaf-soft: #ecfccb;
+  --color-danger: #b91c1c;
+  --shadow-card: 0 18px 40px -28px rgb(28 20 16 / 0.45);
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  color: var(--color-ink);
+  background: var(--color-cream);
+  font-family: var(--font-sans);
+}
+
+.display {
+  font-family: var(--font-display);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-roast);
+  outline-offset: 3px;
+}
+
+.leaflet-container {
+  font-family: var(--font-sans);
+  border-radius: 1rem;
+  z-index: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+.shimmer {
+  background: linear-gradient(90deg, #efe6d8 0%, #f8f2ea 50%, #efe6d8 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}

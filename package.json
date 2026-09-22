@@ -1,0 +1,22 @@
+{
+  "name": "boytags",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Boytag's Lechon Manok and Chicken House — production ordering and delivery platform",
+  "scripts": {
+    "dev": "concurrently -n api,web -c yellow,cyan \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "build": "npm run build --prefix client && npm run build --prefix server",
+    "db:generate": "npm run prisma:generate --prefix server",
+    "db:migrate": "npm run prisma:migrate --prefix server",
+    "db:seed": "npm run prisma:seed --prefix server",
+    "db:push": "npm run prisma:push --prefix server"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
+  }
+}

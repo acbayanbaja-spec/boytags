@@ -1,0 +1,216 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  STAFF
+  ADMIN
+}
+
+enum OrderType {
+  PICKUP
+  DELIVERY
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PREPARING
+  READY
+  OUT_FOR_DELIVERY
+  COMPLETED
+  CANCELLED
+  UNCLAIMED
+}
+
+enum Priority {
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum AlertType {
+  UNCLAIMED_ORDER
+  SOLD_OUT
+  LOW_STOCK
+  NEW_ORDER
+}
+
+enum AlertStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+model User {
+  id                    String         @id @default(uuid())
+  email                 String         @unique
+  passwordHash          String
+  name                  String
+  phone                 String?
+  role                  Role           @default(CUSTOMER)
+  passwordResetToken    String?
+  passwordResetExpires  DateTime?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  orders                Order[]
+  notifications         Notification[]
+  acknowledgedAlerts    Alert[]        @relation("AcknowledgedBy")
+  historyEntries        OrderHistory[]
+
+  @@index([role])
+}
+
+model Category {
+  id          String    @id @default(uuid())
+  name        String
+  slug        String    @unique
+  description String?
+  sortOrder   Int       @default(0)
+  active      Boolean   @default(true)
+  products    Product[]
+}
+
+model Product {
+  id            String      @id @default(uuid())
+  categoryId    String
+  category      Category    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  name          String
+  slug          String      @unique
+  description   String
+  price         Decimal     @db.Decimal(10, 2)
+  imageUrl      String
+  availableQty  Int         @default(0)
+  soldOut       Boolean     @default(false)
+  active        Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  orderItems    OrderItem[]
+
+  @@index([active, soldOut])
+  @@index([categoryId])
+}
+
+model Order {
+  id             String           @id @default(uuid())
+  orderNumber    String           @unique
+  customerId     String
+  customer       User             @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  type           OrderType
+  status         OrderStatus      @default(PENDING)
+  priority       Priority         @default(NORMAL)
+  scheduledAt    DateTime
+  subtotal       Decimal          @db.Decimal(10, 2)
+  deliveryFee    Decimal          @default(0) @db.Decimal(10, 2)
+  total          Decimal          @db.Decimal(10, 2)
+  customerNotes  String?
+  cancelReason   String?
+  unclaimedAt    DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  items          OrderItem[]
+  delivery       DeliveryDetail?
+  history        OrderHistory[]
+  notifications  Notification[]
+  alerts         Alert[]
+
+  @@index([status, scheduledAt])
+  @@index([customerId, createdAt])
+  @@index([type, status])
+}
+
+model OrderItem {
+  id          String  @id @default(uuid())
+  orderId     String
+  productId   String
+  productName String
+  unitPrice   Decimal @db.Decimal(10, 2)
+  quantity    Int
+  lineTotal   Decimal @db.Decimal(10, 2)
+  order       Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product     Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model DeliveryDetail {
+  id           String  @id @default(uuid())
+  orderId      String  @unique
+  order        Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  address      String
+  landmark     String?
+  notes        String?
+  contactPhone String
+  latitude     Decimal @db.Decimal(10, 7)
+  longitude    Decimal @db.Decimal(10, 7)
+}
+
+model OrderHistory {
+  id             String   @id @default(uuid())
+  orderId        String
+  actorId        String?
+  actorRole      String
+  actorName      String
+  action         String
+  previousValue  Json?
+  newValue       Json?
+  createdAt      DateTime @default(now())
+  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  actor          User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([orderId, createdAt])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  orderId   String?
+  type      String
+  title     String
+  body      String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  order     Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([userId, read, createdAt])
+}
+
+model Alert {
+  id                String      @id @default(uuid())
+  type              AlertType
+  status            AlertStatus @default(OPEN)
+  message           String
+  orderId           String?
+  productId         String?
+  acknowledgedById  String?
+  acknowledgedAt    DateTime?
+  createdAt         DateTime    @default(now())
+  order             Order?      @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  acknowledgedBy    User?       @relation("AcknowledgedBy", fields: [acknowledgedById], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([orderId, type, status])
+}
+
+model Setting {
+  id                          String  @id @default("default")
+  storeName                   String
+  storeAddress                String
+  storePhone                  String
+  latitude                    Decimal @db.Decimal(10, 7)
+  longitude                   Decimal @db.Decimal(10, 7)
+  unclaimedThresholdMinutes   Int     @default(20)
+  deliveryFee                 Decimal @default(40) @db.Decimal(10, 2)
+  lowStockThreshold           Int     @default(5)
+  openingTime                 String  @default("09:00")
+  closingTime                 String  @default("21:00")
+  timezone                    String  @default("Asia/Manila")
+}

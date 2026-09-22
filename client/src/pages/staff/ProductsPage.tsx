@@ -1,0 +1,463 @@
+import { useState, useMemo } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  Plus,
+  Edit2,
+  Trash2,
+  Search,
+  Flame,
+  AlertCircle,
+  CheckCircle2,
+  PackageX,
+  PackageCheck,
+  RefreshCw,
+} from "lucide-react";
+import { api } from "@/lib/api";
+import { formatPeso } from "@/lib/utils";
+import { useRealtime } from "@/hooks/useRealtime";
+import { Button, Card, Field, Modal, Skeleton, inputClass } from "@/components/ui";
+import type { Product } from "@/types";
+import { toast } from "sonner";
+
+type Category = {
+  id: string;
+  name: string;
+  slug: string;
+};
+
+export function StaffProductsPage() {
+  const queryClient = useQueryClient();
+  useRealtime();
+
+  const [search, setSearch] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("ALL");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+
+  // Form State
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [price, setPrice] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
+  const [availableQty, setAvailableQty] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [active, setActive] = useState(true);
+
+  const { data: products, isLoading } = useQuery<Product[]>({
+    queryKey: ["products", "staff"],
+    queryFn: () => api<Product[]>("/api/products"),
+  });
+
+  const { data: categories } = useQuery<Category[]>({
+    queryKey: ["categories"],
+    queryFn: () => api<Category[]>("/api/categories"),
+  });
+
+  const filtered = useMemo(() => {
+    if (!products) return [];
+    return products.filter((p) => {
+      const matchCat = selectedCategory === "ALL" || p.category?.slug === selectedCategory;
+      const matchSearch =
+        !search.trim() ||
+        p.name.toLowerCase().includes(search.toLowerCase()) ||
+        p.description.toLowerCase().includes(search.toLowerCase());
+      return matchCat && matchSearch;
+    });
+  }, [products, selectedCategory, search]);
+
+  const saveMutation = useMutation({
+    mutationFn: async (payload: Record<string, unknown>) => {
+      if (editingProduct) {
+        return api<Product>(`/api/products/${editingProduct.id}`, {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        });
+      }
+      return api<Product>("/api/products", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+    },
+    onSuccess: () => {
+      toast.success(editingProduct ? "Product updated!" : "Product created!");
+      setModalOpen(false);
+      setEditingProduct(null);
+      void queryClient.invalidateQueries({ queryKey: ["products"] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to save product.");
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api(`/api/products/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      toast.success("Product removed or deactivated.");
+      void queryClient.invalidateQueries({ queryKey: ["products"] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to remove product.");
+    },
+  });
+
+  const quickQtyMutation = useMutation({
+    mutationFn: ({ id, qty }: { id: string; qty: number }) =>
+      api<Product>(`/api/products/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ availableQty: Math.max(0, qty) }),
+      }),
+    onSuccess: (updated) => {
+      if (updated.soldOut || updated.availableQty <= 0) {
+        toast.warning(`${updated.name} is now marked SOLD OUT.`);
+      } else {
+        toast.success(`Updated ${updated.name} stock to ${updated.availableQty}.`);
+      }
+      void queryClient.invalidateQueries({ queryKey: ["products"] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+  });
+
+  function openCreate() {
+    setEditingProduct(null);
+    setName("");
+    setDescription("");
+    setPrice("");
+    setImageUrl("");
+    setAvailableQty("20");
+    setCategoryId(categories?.[0]?.id || "");
+    setActive(true);
+    setModalOpen(true);
+  }
+
+  function openEdit(p: Product) {
+    setEditingProduct(p);
+    setName(p.name);
+    setDescription(p.description);
+    setPrice(String(p.price));
+    setImageUrl(p.imageUrl);
+    setAvailableQty(String(p.availableQty));
+    setCategoryId(p.category?.id || "");
+    setActive(p.active);
+    setModalOpen(true);
+  }
+
+  function handleFormSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    saveMutation.mutate({
+      categoryId,
+      name: name.trim(),
+      description: description.trim(),
+      price: Number(price),
+      imageUrl: imageUrl.trim(),
+      availableQty: Number(availableQty),
+      active,
+    });
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-line pb-4">
+        <div>
+          <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-roast">
+            <Flame className="h-4 w-4" />
+            <span>Kitchen Inventory & Availability</span>
+          </div>
+          <h1 className="display text-3xl font-bold text-ink mt-0.5">Menu & Inventory Manager</h1>
+          <p className="text-xs text-muted">
+            Live stock counts directly govern customer availability. Zero quantities are automatically marked SOLD OUT.
+          </p>
+        </div>
+
+        <Button onClick={openCreate} className="text-xs h-10 px-4 shadow-sm">
+          <Plus className="h-4 w-4 mr-1.5" />
+          Add New Dish
+        </Button>
+      </div>
+
+      {/* Filter and Search Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-1.5 overflow-x-auto text-xs font-semibold">
+          <button
+            type="button"
+            onClick={() => setSelectedCategory("ALL")}
+            className={`rounded-xl px-3 py-1.5 transition ${
+              selectedCategory === "ALL"
+                ? "bg-roast text-white shadow-sm"
+                : "bg-paper border border-line text-ink hover:border-roast/40"
+            }`}
+          >
+            All Categories
+          </button>
+          {categories?.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => setSelectedCategory(c.slug)}
+              className={`rounded-xl px-3 py-1.5 transition ${
+                selectedCategory === c.slug
+                  ? "bg-roast text-white shadow-sm"
+                  : "bg-paper border border-line text-ink hover:border-roast/40"
+              }`}
+            >
+              {c.name}
+            </button>
+          ))}
+        </div>
+
+        <div className="relative w-full sm:w-64">
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted" />
+          <input
+            type="text"
+            placeholder="Search dish name..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full rounded-xl border border-line bg-paper pl-9 pr-3 py-2 text-xs outline-none focus:border-roast"
+          />
+        </div>
+      </div>
+
+      {/* Products Table */}
+      {isLoading ? (
+        <div className="space-y-3">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <Skeleton key={i} className="h-16 w-full rounded-2xl" />
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-line bg-paper overflow-hidden shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-cream border-b border-line text-muted uppercase text-[10px] tracking-wider">
+                <tr>
+                  <th className="py-3 px-4">Item</th>
+                  <th className="py-3 px-4">Category</th>
+                  <th className="py-3 px-4">Price</th>
+                  <th className="py-3 px-4">Available Qty</th>
+                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4 text-right">Quick Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {filtered.map((product) => {
+                  const isSoldOut = product.soldOut || product.availableQty <= 0;
+
+                  return (
+                    <tr key={product.id} className="hover:bg-cream/40 transition">
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={product.imageUrl}
+                            alt={product.name}
+                            className="h-10 w-10 rounded-lg object-cover bg-cream shrink-0"
+                          />
+                          <div>
+                            <p className="font-bold text-ink text-sm">{product.name}</p>
+                            <p className="text-[11px] text-muted line-clamp-1 max-w-xs">{product.description}</p>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="py-3 px-4 text-muted font-medium">
+                        {product.category?.name || "Main"}
+                      </td>
+
+                      <td className="py-3 px-4 font-bold text-ink">
+                        {formatPeso(product.price)}
+                      </td>
+
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2">
+                          <span className={`font-mono font-bold text-sm ${isSoldOut ? "text-danger" : "text-ink"}`}>
+                            {product.availableQty}
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => quickQtyMutation.mutate({ id: product.id, qty: product.availableQty - 1 })}
+                              className="rounded border border-line bg-cream px-1.5 py-0.5 text-[10px] font-bold hover:bg-paper"
+                              title="Decrease by 1"
+                            >
+                              -1
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => quickQtyMutation.mutate({ id: product.id, qty: product.availableQty + 5 })}
+                              className="rounded border border-line bg-cream px-1.5 py-0.5 text-[10px] font-bold hover:bg-paper"
+                              title="Add 5"
+                            >
+                              +5
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => quickQtyMutation.mutate({ id: product.id, qty: 0 })}
+                              className="rounded border border-danger/30 text-danger bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold hover:bg-rose-100"
+                              title="Set zero (Sold Out)"
+                            >
+                              0 (Sold Out)
+                            </button>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="py-3 px-4">
+                        {isSoldOut ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-danger px-2.5 py-0.5 text-[10px] font-bold text-white shadow-sm">
+                            <PackageX className="h-3 w-3" /> SOLD OUT
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-leaf-soft text-leaf px-2.5 py-0.5 text-[10px] font-semibold">
+                            <PackageCheck className="h-3 w-3" /> Available
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="py-3 px-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button
+                            variant="outline"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => openEdit(product)}
+                          >
+                            <Edit2 className="h-3 w-3 mr-1" /> Edit
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            className="h-7 px-2 text-xs text-danger hover:bg-rose-50"
+                            onClick={() => {
+                              if (confirm(`Remove or deactivate ${product.name}?`)) {
+                                deleteMutation.mutate(product.id);
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Add / Edit Product Modal */}
+      <Modal
+        open={modalOpen}
+        title={editingProduct ? "Edit Dish Details" : "Add New Dish"}
+        onClose={() => setModalOpen(false)}
+      >
+        <form onSubmit={handleFormSubmit} className="space-y-4 max-h-[75vh] overflow-y-auto pr-1 text-xs">
+          <Field label="Dish Name">
+            <input
+              type="text"
+              required
+              placeholder="e.g. Whole Lechon Manok"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className={inputClass()}
+            />
+          </Field>
+
+          <Field label="Category">
+            <select
+              required
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+              className={inputClass()}
+            >
+              {categories?.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label="Description">
+            <textarea
+              required
+              rows={3}
+              placeholder="Describe marinade, flavor, portion size..."
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className={inputClass()}
+            />
+          </Field>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Price (PHP)">
+              <input
+                type="number"
+                step="0.01"
+                required
+                placeholder="380.00"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                className={inputClass()}
+              />
+            </Field>
+
+            <Field label="Available Inventory Quantity">
+              <input
+                type="number"
+                required
+                placeholder="20"
+                value={availableQty}
+                onChange={(e) => setAvailableQty(e.target.value)}
+                className={inputClass()}
+              />
+            </Field>
+          </div>
+
+          <Field label="Image URL">
+            <input
+              type="url"
+              required
+              placeholder="https://images.unsplash.com/..."
+              value={imageUrl}
+              onChange={(e) => setImageUrl(e.target.value)}
+              className={inputClass()}
+            />
+          </Field>
+
+          <div className="flex items-center gap-2 pt-2">
+            <input
+              type="checkbox"
+              id="activeCheckbox"
+              checked={active}
+              onChange={(e) => setActive(e.target.checked)}
+              className="h-4 w-4 rounded border-line text-roast accent-roast"
+            />
+            <label htmlFor="activeCheckbox" className="font-semibold text-ink cursor-pointer">
+              Active on Customer Menu
+            </label>
+          </div>
+
+          <div className="flex gap-2 pt-3 border-t border-line">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1"
+              onClick={() => setModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              loading={saveMutation.isPending}
+              className="flex-1"
+            >
+              {editingProduct ? "Save Changes" : "Create Product"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+    </div>
+  );
+}
