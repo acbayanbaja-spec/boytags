@@ -17,13 +17,20 @@ import {
   ChevronLeft,
   FileText,
   ShieldCheck,
+  Printer,
+  Star,
+  Share2,
+  Copy,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { formatDateTime, formatPeso, formatTime } from "@/lib/utils";
+import { sound } from "@/lib/sound";
 import { useAuth } from "@/context/AuthContext";
 import { useRealtime } from "@/hooks/useRealtime";
-import { LocationPicker } from "@/components/MapPin";
+import { LocationPicker, TUPI_BOYTAGS_COORDS } from "@/components/MapPin";
 import { OrderTimeline } from "@/components/OrderTimeline";
+import { ReceiptModal } from "@/components/ReceiptModal";
+import { RatingModal } from "@/components/RatingModal";
 import { Button, Card, Field, Modal, Skeleton, StatusBadge, inputClass } from "@/components/ui";
 import { STATUS_LABEL, type Order, type OrderStatus } from "@/types";
 import { toast } from "sonner";
@@ -41,10 +48,13 @@ export function OrderTrackingPage() {
   const [editNotes, setEditNotes] = useState("");
   const [editSchedule, setEditSchedule] = useState("");
 
+  const [receiptOpen, setReceiptOpen] = useState(false);
+  const [ratingOpen, setRatingOpen] = useState(false);
+
   const { data: order, isLoading, error } = useQuery<Order>({
     queryKey: ["order", id],
     queryFn: () => api<Order>(`/api/orders/${id}`),
-    refetchInterval: 5000, // automatic backup polling alongside SSE
+    refetchInterval: 5000,
   });
 
   const cancelMutation = useMutation({
@@ -54,7 +64,8 @@ export function OrderTrackingPage() {
         body: JSON.stringify({ reason }),
       }),
     onSuccess: () => {
-      toast.success("Order cancelled successfully. Inventory has been restored.");
+      sound.play("alert");
+      toast.success("Order cancelled. Inventory has been restored to the kitchen.");
       setCancelOpen(false);
       void queryClient.invalidateQueries({ queryKey: ["order", id] });
       void queryClient.invalidateQueries({ queryKey: ["orders"] });
@@ -71,6 +82,7 @@ export function OrderTrackingPage() {
         body: JSON.stringify(input),
       }),
     onSuccess: () => {
+      sound.play("success");
       toast.success("Order details updated.");
       setEditOpen(false);
       void queryClient.invalidateQueries({ queryKey: ["order", id] });
@@ -80,14 +92,22 @@ export function OrderTrackingPage() {
     },
   });
 
+  function handleShareLink() {
+    sound.play("click");
+    if (navigator.clipboard) {
+      void navigator.clipboard.writeText(window.location.href);
+      toast.success("Live order tracking link copied to clipboard!");
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="space-y-6 py-6">
-        <Skeleton className="h-10 w-48" />
-        <Skeleton className="h-64 w-full rounded-2xl" />
+        <Skeleton className="h-10 w-48 rounded-xl" />
+        <Skeleton className="h-64 w-full rounded-3xl" />
         <div className="grid gap-6 md:grid-cols-2">
-          <Skeleton className="h-80 w-full rounded-2xl" />
-          <Skeleton className="h-80 w-full rounded-2xl" />
+          <Skeleton className="h-80 w-full rounded-3xl" />
+          <Skeleton className="h-80 w-full rounded-3xl" />
         </div>
       </div>
     );
@@ -97,7 +117,7 @@ export function OrderTrackingPage() {
     return (
       <div className="py-12 text-center space-y-4">
         <h2 className="display text-2xl font-bold text-ink">Order Not Found</h2>
-        <p className="text-sm text-muted">We couldn't retrieve this order. Please verify your order number.</p>
+        <p className="text-sm text-muted">We couldn't retrieve this order. Please verify your reference number.</p>
         <Link to="/orders">
           <Button variant="outline">Back to My Orders</Button>
         </Link>
@@ -113,53 +133,103 @@ export function OrderTrackingPage() {
   const currentIndex = stages.indexOf(order.status);
   const isCancelled = order.status === "CANCELLED";
   const isUnclaimed = order.status === "UNCLAIMED";
+  const isCompleted = order.status === "COMPLETED";
 
   const canCancel = ["PENDING", "CONFIRMED", "PREPARING"].includes(order.status);
   const canEdit = ["PENDING", "CONFIRMED"].includes(order.status);
 
   return (
     <div className="space-y-8 py-4">
-      {/* Top Bar */}
+      {/* Top Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-line pb-4">
         <div className="flex items-center gap-3">
-          <Link to="/orders" className="rounded-xl border border-line p-2 hover:bg-paper transition" aria-label="Back">
-            <ChevronLeft className="h-5 w-5" />
+          <Link
+            to="/orders"
+            className="rounded-2xl border border-line bg-paper p-2 hover:bg-cream transition"
+            aria-label="Back"
+          >
+            <ChevronLeft className="h-5 w-5 text-ink" />
           </Link>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5">
               <h1 className="display text-2xl font-bold text-ink">Order {order.orderNumber}</h1>
               <StatusBadge status={order.status} />
             </div>
-            <p className="text-xs text-muted">
-              Placed on {formatDateTime(order.createdAt)} • {isDelivery ? "Doorstep Delivery" : "Store Pickup"}
+            <p className="text-xs text-muted mt-0.5">
+              Placed {formatDateTime(order.createdAt)} • {isDelivery ? "Doorstep Delivery" : "Poblacion Tupi Pickup"}
             </p>
           </div>
         </div>
 
-        {/* Action buttons */}
-        <div className="flex items-center gap-2">
+        {/* Action Controls */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleShareLink}
+            className="text-xs"
+            title="Share Tracking Link"
+          >
+            <Share2 className="h-3.5 w-3.5 mr-1" />
+            Share
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              sound.play("click");
+              setReceiptOpen(true);
+            }}
+            className="text-xs"
+          >
+            <Printer className="h-3.5 w-3.5 mr-1" />
+            Receipt
+          </Button>
+
+          {isCompleted && (
+            <Button
+              variant="glow"
+              size="sm"
+              onClick={() => {
+                sound.play("click");
+                setRatingOpen(true);
+              }}
+              className="text-xs"
+            >
+              <Star className="h-3.5 w-3.5 mr-1 fill-amber-300" />
+              Rate Feast
+            </Button>
+          )}
+
           {canEdit && (
             <Button
               variant="outline"
+              size="sm"
               onClick={() => {
+                sound.play("click");
                 setEditNotes(order.customerNotes || "");
                 setEditOpen(true);
               }}
               className="text-xs"
             >
               <Edit3 className="h-3.5 w-3.5 mr-1" />
-              Modify Order
+              Modify
             </Button>
           )}
 
           {canCancel && (
             <Button
               variant="danger"
-              onClick={() => setCancelOpen(true)}
+              size="sm"
+              onClick={() => {
+                sound.play("click");
+                setCancelOpen(true);
+              }}
               className="text-xs"
             >
               <XCircle className="h-3.5 w-3.5 mr-1" />
-              Cancel Order
+              Cancel
             </Button>
           )}
         </div>
@@ -170,18 +240,18 @@ export function OrderTrackingPage() {
         <motion.div
           initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="rounded-2xl border-2 border-red-500 bg-red-50 p-5 text-red-900 shadow-md"
+          className="rounded-3xl border-2 border-red-500 bg-red-50 p-5 text-red-950 shadow-md"
         >
           <div className="flex items-start gap-4">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-red-600 text-white">
-              <AlertTriangle className="h-5 w-5" />
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-red-600 text-white shadow-md">
+              <AlertTriangle className="h-6 w-6" />
             </div>
             <div className="space-y-1">
               <h3 className="font-bold text-base">⚠ Unclaimed Order Alert — Awaiting Claim</h3>
               <p className="text-xs leading-relaxed text-red-800">
                 This order was scheduled for <strong>{formatTime(order.scheduledAt)}</strong> and has not yet been received.
-                Your hot roast chicken is being held securely in the kitchen warming chamber. Please pick it up immediately
-                or contact store staff at <strong>(049) 530-0192</strong>.
+                Your hot roast chicken is being held securely in our kitchen warming chamber in Poblacion, Tupi.
+                Please pick it up immediately or call our hotline at <strong>(083) 228-1234</strong>.
               </p>
             </div>
           </div>
@@ -190,12 +260,12 @@ export function OrderTrackingPage() {
 
       {/* Cancelled Alert Banner */}
       {isCancelled && (
-        <div className="rounded-2xl border border-rose-300 bg-rose-50 p-5 text-rose-900">
+        <div className="rounded-3xl border border-rose-300 bg-rose-50 p-5 text-rose-950">
           <div className="flex items-center gap-3">
             <XCircle className="h-6 w-6 text-rose-600 shrink-0" />
             <div>
               <h3 className="font-bold text-sm">This order was cancelled</h3>
-              <p className="text-xs text-rose-700 mt-0.5">
+              <p className="text-xs text-rose-800 mt-0.5">
                 Reason: {order.cancelReason || "Cancelled by customer or store staff."}
               </p>
             </div>
@@ -213,9 +283,9 @@ export function OrderTrackingPage() {
                 Estimated schedule: <strong className="text-ink">{formatDateTime(order.scheduledAt)}</strong>
               </p>
             </div>
-            <div className="flex items-center gap-1.5 text-xs text-leaf font-semibold bg-leaf-soft px-3 py-1 rounded-full">
+            <div className="flex items-center gap-1.5 text-xs text-leaf font-bold bg-leaf-soft px-3 py-1 rounded-full">
               <span className="h-2 w-2 rounded-full bg-leaf animate-pulse" />
-              <span>Live Kitchen Tracker</span>
+              <span>Live Tupi Kitchen Telemetry</span>
             </div>
           </div>
 
@@ -227,9 +297,9 @@ export function OrderTrackingPage() {
               return (
                 <div key={stage} className="flex flex-col items-center text-center">
                   <div
-                    className={`grid h-10 w-10 place-items-center rounded-2xl text-xs font-bold transition shadow-sm ${
+                    className={`grid h-11 w-11 place-items-center rounded-2xl text-xs font-bold transition shadow-sm ${
                       isCurrent
-                        ? "bg-roast text-white ring-4 ring-roast/20"
+                        ? "bg-roast text-white ring-4 ring-roast/20 scale-105"
                         : isPast
                         ? "bg-leaf text-white"
                         : "bg-cream text-muted border border-line"
@@ -263,7 +333,7 @@ export function OrderTrackingPage() {
               {order.items.map((item) => (
                 <div key={item.id} className="py-3 flex items-center justify-between text-xs sm:text-sm">
                   <div className="space-y-0.5">
-                    <p className="font-semibold text-ink">{item.productName}</p>
+                    <p className="font-bold text-ink">{item.productName}</p>
                     <p className="text-muted text-[11px]">
                       {item.quantity} × {formatPeso(item.unitPrice)}
                     </p>
@@ -289,7 +359,7 @@ export function OrderTrackingPage() {
             </div>
 
             {order.customerNotes && (
-              <div className="rounded-xl border border-line bg-cream p-3 text-xs">
+              <div className="rounded-2xl border border-line bg-cream p-3 text-xs">
                 <span className="font-bold text-ink block mb-0.5">Kitchen Special Instructions:</span>
                 <span className="text-muted italic">{order.customerNotes}</span>
               </div>
@@ -302,18 +372,18 @@ export function OrderTrackingPage() {
               <div className="flex items-center justify-between">
                 <h2 className="display text-lg font-bold text-ink flex items-center gap-2">
                   <MapPin className="h-5 w-5 text-roast" />
-                  <span>Delivery Address & Pinpoint</span>
+                  <span>Delivery Address & GPS Pinpoint</span>
                 </h2>
-                <span className="text-[11px] font-semibold text-leaf bg-leaf-soft px-2.5 py-0.5 rounded-full">
+                <span className="text-[11px] font-bold text-leaf bg-leaf-soft px-2.5 py-0.5 rounded-full">
                   Rider Guide
                 </span>
               </div>
 
               <div className="space-y-2 text-xs sm:text-sm">
-                <p className="font-semibold text-ink">{order.delivery.address}</p>
+                <p className="font-bold text-ink">{order.delivery.address}</p>
 
                 {order.delivery.landmark && (
-                  <div className="rounded-xl border border-amber-300 bg-amber-50/60 p-3 text-xs text-amber-900">
+                  <div className="rounded-2xl border border-amber-300 bg-amber-50/70 p-3 text-xs text-amber-900">
                     <span className="font-bold block">Landmark for Rider:</span>
                     <span>{order.delivery.landmark}</span>
                   </div>
@@ -344,36 +414,43 @@ export function OrderTrackingPage() {
             <Card className="p-6 space-y-3">
               <h2 className="display text-lg font-bold text-ink flex items-center gap-2">
                 <Store className="h-5 w-5 text-roast" />
-                <span>Pickup Instructions</span>
+                <span>Pickup Instructions (Poblacion, Tupi HQ)</span>
               </h2>
-              <p className="text-xs sm:text-sm text-ink">
-                <strong>Boytag's Lechon Manok & Chicken House</strong>
+              <p className="text-xs sm:text-sm text-ink font-bold">
+                Boytag's Lechon Manok and Chicken House
               </p>
               <p className="text-xs text-muted">
-                Maharlika Highway, Brgy. Dila, Santa Rosa, Laguna
+                South Cotabato - Sarangani Road, Poblacion, Tupi, South Cotabato
               </p>
               <p className="text-xs text-muted">
-                Present order reference <strong>{order.orderNumber}</strong> at the counter when you arrive.
+                Present your order reference <strong>{order.orderNumber}</strong> at the front counter when you arrive.
               </p>
+              <div className="pt-2">
+                <LocationPicker
+                  lat={TUPI_BOYTAGS_COORDS.lat}
+                  lng={TUPI_BOYTAGS_COORDS.lng}
+                  readOnly
+                />
+              </div>
             </Card>
           )}
         </div>
 
-        {/* Right Column: Order Change History Timeline (Audit Trail) */}
+        {/* Right Column: Order Change History Timeline */}
         <div className="space-y-6 lg:col-span-5">
           <Card className="p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-line pb-3">
               <h2 className="display text-lg font-bold text-ink flex items-center gap-2">
                 <FileText className="h-5 w-5 text-roast" />
-                <span>Order Change History</span>
+                <span>Order Event History</span>
               </h2>
               <span className="text-[11px] text-muted font-mono">
                 {order.history?.length || 0} events
               </span>
             </div>
 
-            <p className="text-xs text-muted">
-              Live audit trail recording all creations, status changes, schedule revisions, and staff updates:
+            <p className="text-xs text-muted leading-relaxed">
+              Complete audit stream recording all creations, kitchen station updates, and dispatch handovers:
             </p>
 
             <div className="pt-2">
@@ -390,17 +467,17 @@ export function OrderTrackingPage() {
             e.preventDefault();
             cancelMutation.mutate(cancelReason);
           }}
-          className="space-y-4"
+          className="space-y-4 text-xs"
         >
-          <p className="text-xs text-muted">
+          <p className="text-muted leading-relaxed">
             Are you sure you want to cancel order <strong>{order.orderNumber}</strong>?
-            Any reserved inventory will be automatically restored to the kitchen.
+            Any reserved rotisserie inventory will be automatically restored to our Tupi kitchen.
           </p>
 
           <Field label="Cancellation Reason (optional)">
             <textarea
               rows={2}
-              placeholder="e.g. Ordered by mistake, schedule conflict"
+              placeholder="e.g. Schedule conflict, ordered by mistake"
               value={cancelReason}
               onChange={(e) => setCancelReason(e.target.value)}
               className={inputClass()}
@@ -420,7 +497,7 @@ export function OrderTrackingPage() {
               type="submit"
               variant="danger"
               loading={cancelMutation.isPending}
-              className="flex-1"
+              className="flex-1 font-bold"
             >
               Confirm Cancel
             </Button>
@@ -438,7 +515,7 @@ export function OrderTrackingPage() {
               scheduledAt: editSchedule || undefined,
             });
           }}
-          className="space-y-4"
+          className="space-y-4 text-xs"
         >
           <Field label="Update Preparation Schedule (optional)">
             <input
@@ -470,13 +547,27 @@ export function OrderTrackingPage() {
             <Button
               type="submit"
               loading={updateMutation.isPending}
-              className="flex-1"
+              className="flex-1 font-bold"
             >
               Save Changes
             </Button>
           </div>
         </form>
       </Modal>
+
+      {/* Official Receipt Modal */}
+      <ReceiptModal
+        open={receiptOpen}
+        order={order}
+        onClose={() => setReceiptOpen(false)}
+      />
+
+      {/* Order Rating Modal */}
+      <RatingModal
+        open={ratingOpen}
+        orderNumber={order.orderNumber}
+        onClose={() => setRatingOpen(false)}
+      />
     </div>
   );
 }

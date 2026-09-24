@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Bell, Check, CheckCheck, ArrowRight, Clock, AlertTriangle, Sparkles } from "lucide-react";
 import { api } from "@/lib/api";
 import { formatDateTime } from "@/lib/utils";
+import { sound } from "@/lib/sound";
 import { useRealtime } from "@/hooks/useRealtime";
 import { Button, Card, EmptyState, Skeleton } from "@/components/ui";
 import type { NotificationItem } from "@/types";
@@ -20,6 +21,7 @@ export function NotificationsPage() {
   const markAllMutation = useMutation({
     mutationFn: () => api("/api/notifications/read-all", { method: "POST" }),
     onSuccess: () => {
+      sound.play("click");
       toast.success("All notifications marked as read.");
       void queryClient.invalidateQueries({ queryKey: ["notifications"] });
     },
@@ -28,6 +30,7 @@ export function NotificationsPage() {
   const markOneMutation = useMutation({
     mutationFn: (id: string) => api(`/api/notifications/${id}/read`, { method: "POST" }),
     onSuccess: () => {
+      sound.play("click");
       void queryClient.invalidateQueries({ queryKey: ["notifications"] });
     },
   });
@@ -42,14 +45,15 @@ export function NotificationsPage() {
         <div>
           <h1 className="display text-3xl font-bold text-ink">Notifications</h1>
           <p className="text-xs text-muted mt-0.5">
-            Real-time updates regarding your kitchen orders, preparations, and deliveries.
+            Real-time updates regarding your kitchen orders, preparations, and deliveries in Tupi.
           </p>
         </div>
 
         {unreadCount > 0 && (
           <Button
             variant="outline"
-            className="text-xs h-9"
+            size="sm"
+            className="text-xs h-9 font-semibold"
             onClick={() => markAllMutation.mutate()}
             loading={markAllMutation.isPending}
           >
@@ -68,10 +72,10 @@ export function NotificationsPage() {
       ) : notifications.length === 0 ? (
         <EmptyState
           title="No Notifications Yet"
-          body="You're all caught up! Order status updates and kitchen alerts will appear here in real time."
+          body="You're all caught up! Order status updates and Tupi kitchen alerts will appear here in real time."
           action={
             <Link to="/menu">
-              <Button className="mt-2">Order Fresh Lechon</Button>
+              <Button className="mt-2 font-bold shadow-md shadow-roast/20">Order Fresh Lechon</Button>
             </Link>
           }
         />
@@ -86,26 +90,26 @@ export function NotificationsPage() {
                 key={n.id}
                 className={`flex items-start justify-between gap-4 p-4 transition ${
                   !n.read
-                    ? "border-roast/30 bg-cream/70 shadow-sm"
+                    ? "border-roast/40 bg-cream/70 shadow-sm"
                     : "border-line bg-paper opacity-80 hover:opacity-100"
                 }`}
               >
                 <div className="flex items-start gap-3">
                   <div
-                    className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl text-xs font-bold ${
+                    className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl text-xs font-bold ${
                       isUnclaimed
                         ? "bg-red-100 text-danger"
                         : isCancelled
                         ? "bg-rose-100 text-rose-800"
                         : !n.read
-                        ? "bg-roast text-white"
+                        ? "bg-roast text-white shadow-sm"
                         : "bg-cream text-muted border border-line"
                     }`}
                   >
                     {isUnclaimed ? (
-                      <AlertTriangle className="h-4 w-4" />
+                      <AlertTriangle className="h-5 w-5" />
                     ) : (
-                      <Bell className="h-4 w-4" />
+                      <Bell className="h-5 w-5" />
                     )}
                   </div>
 
@@ -132,7 +136,7 @@ export function NotificationsPage() {
                         if (!n.read) markOneMutation.mutate(n.id);
                       }}
                     >
-                      <Button variant="outline" className="h-8 px-2.5 text-xs">
+                      <Button variant="outline" size="sm" className="h-8 px-2.5 text-xs font-semibold">
                         View Order <ArrowRight className="h-3 w-3 ml-1" />
                       </Button>
                     </Link>

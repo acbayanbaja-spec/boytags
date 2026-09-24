@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { formatPeso } from "@/lib/utils";
+import { sound } from "@/lib/sound";
 import { useRealtime } from "@/hooks/useRealtime";
 import { Button, Card, Field, Modal, Skeleton, inputClass } from "@/components/ui";
 import type { Product } from "@/types";
@@ -79,13 +80,15 @@ export function StaffProductsPage() {
       });
     },
     onSuccess: () => {
-      toast.success(editingProduct ? "Product updated!" : "Product created!");
+      sound.play("success");
+      toast.success(editingProduct ? "Product updated in Tupi catalog!" : "New dish added to Tupi catalog!");
       setModalOpen(false);
       setEditingProduct(null);
       void queryClient.invalidateQueries({ queryKey: ["products"] });
       void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
     onError: (err: Error) => {
+      sound.play("alert");
       toast.error(err.message || "Failed to save product.");
     },
   });
@@ -93,7 +96,8 @@ export function StaffProductsPage() {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api(`/api/products/${id}`, { method: "DELETE" }),
     onSuccess: () => {
-      toast.success("Product removed or deactivated.");
+      sound.play("alert");
+      toast.success("Dish removed from customer catalog.");
       void queryClient.invalidateQueries({ queryKey: ["products"] });
       void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
@@ -109,6 +113,7 @@ export function StaffProductsPage() {
         body: JSON.stringify({ availableQty: Math.max(0, qty) }),
       }),
     onSuccess: (updated) => {
+      sound.play("click");
       if (updated.soldOut || updated.availableQty <= 0) {
         toast.warning(`${updated.name} is now marked SOLD OUT.`);
       } else {
@@ -120,11 +125,12 @@ export function StaffProductsPage() {
   });
 
   function openCreate() {
+    sound.play("click");
     setEditingProduct(null);
     setName("");
     setDescription("");
     setPrice("");
-    setImageUrl("");
+    setImageUrl("https://images.unsplash.com/photo-1598103442097-8b70429476eb?auto=format&fit=crop&w=1200&q=80");
     setAvailableQty("20");
     setCategoryId(categories?.[0]?.id || "");
     setActive(true);
@@ -132,6 +138,7 @@ export function StaffProductsPage() {
   }
 
   function openEdit(p: Product) {
+    sound.play("click");
     setEditingProduct(p);
     setName(p.name);
     setDescription(p.description);
@@ -161,17 +168,17 @@ export function StaffProductsPage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-line pb-4">
         <div>
-          <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-roast">
+          <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-roast mb-1">
             <Flame className="h-4 w-4" />
-            <span>Kitchen Inventory & Availability</span>
+            <span>Poblacion, Tupi Inventory & Kitchen Stocks</span>
           </div>
-          <h1 className="display text-3xl font-bold text-ink mt-0.5">Menu & Inventory Manager</h1>
+          <h1 className="display text-3xl font-bold text-ink">Menu & Inventory Manager</h1>
           <p className="text-xs text-muted">
-            Live stock counts directly govern customer availability. Zero quantities are automatically marked SOLD OUT.
+            Live counts directly govern customer ordering. Depleted counts are automatically set to SOLD OUT.
           </p>
         </div>
 
-        <Button onClick={openCreate} className="text-xs h-10 px-4 shadow-sm">
+        <Button onClick={openCreate} className="text-xs h-10 px-4 shadow-md shadow-roast/20 font-bold">
           <Plus className="h-4 w-4 mr-1.5" />
           Add New Dish
         </Button>
@@ -182,10 +189,13 @@ export function StaffProductsPage() {
         <div className="flex items-center gap-1.5 overflow-x-auto text-xs font-semibold">
           <button
             type="button"
-            onClick={() => setSelectedCategory("ALL")}
-            className={`rounded-xl px-3 py-1.5 transition ${
+            onClick={() => {
+              sound.play("click");
+              setSelectedCategory("ALL");
+            }}
+            className={`rounded-2xl px-3.5 py-1.5 transition ${
               selectedCategory === "ALL"
-                ? "bg-roast text-white shadow-sm"
+                ? "bg-roast text-white font-bold shadow-sm"
                 : "bg-paper border border-line text-ink hover:border-roast/40"
             }`}
           >
@@ -195,10 +205,13 @@ export function StaffProductsPage() {
             <button
               key={c.id}
               type="button"
-              onClick={() => setSelectedCategory(c.slug)}
-              className={`rounded-xl px-3 py-1.5 transition ${
+              onClick={() => {
+                sound.play("click");
+                setSelectedCategory(c.slug);
+              }}
+              className={`rounded-2xl px-3.5 py-1.5 transition ${
                 selectedCategory === c.slug
-                  ? "bg-roast text-white shadow-sm"
+                  ? "bg-roast text-white font-bold shadow-sm"
                   : "bg-paper border border-line text-ink hover:border-roast/40"
               }`}
             >
@@ -214,7 +227,7 @@ export function StaffProductsPage() {
             placeholder="Search dish name..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-xl border border-line bg-paper pl-9 pr-3 py-2 text-xs outline-none focus:border-roast"
+            className="w-full rounded-2xl border border-line bg-paper pl-9 pr-3 py-2 text-xs outline-none focus:border-roast shadow-sm"
           />
         </div>
       </div>
@@ -227,17 +240,17 @@ export function StaffProductsPage() {
           ))}
         </div>
       ) : (
-        <div className="rounded-2xl border border-line bg-paper overflow-hidden shadow-sm">
+        <div className="rounded-3xl border border-line bg-paper overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-cream border-b border-line text-muted uppercase text-[10px] tracking-wider">
                 <tr>
-                  <th className="py-3 px-4">Item</th>
-                  <th className="py-3 px-4">Category</th>
-                  <th className="py-3 px-4">Price</th>
-                  <th className="py-3 px-4">Available Qty</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4 text-right">Quick Actions</th>
+                  <th className="py-3.5 px-4 font-bold">Item</th>
+                  <th className="py-3.5 px-4 font-bold">Category</th>
+                  <th className="py-3.5 px-4 font-bold">Price</th>
+                  <th className="py-3.5 px-4 font-bold">Available Stock</th>
+                  <th className="py-3.5 px-4 font-bold">Status</th>
+                  <th className="py-3.5 px-4 text-right font-bold">Quick Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
@@ -246,12 +259,12 @@ export function StaffProductsPage() {
 
                   return (
                     <tr key={product.id} className="hover:bg-cream/40 transition">
-                      <td className="py-3 px-4">
+                      <td className="py-3.5 px-4">
                         <div className="flex items-center gap-3">
                           <img
                             src={product.imageUrl}
                             alt={product.name}
-                            className="h-10 w-10 rounded-lg object-cover bg-cream shrink-0"
+                            className="h-11 w-11 rounded-xl object-cover bg-cream shrink-0"
                           />
                           <div>
                             <p className="font-bold text-ink text-sm">{product.name}</p>
@@ -260,15 +273,15 @@ export function StaffProductsPage() {
                         </div>
                       </td>
 
-                      <td className="py-3 px-4 text-muted font-medium">
+                      <td className="py-3.5 px-4 text-muted font-semibold">
                         {product.category?.name || "Main"}
                       </td>
 
-                      <td className="py-3 px-4 font-bold text-ink">
+                      <td className="py-3.5 px-4 font-bold text-ink">
                         {formatPeso(product.price)}
                       </td>
 
-                      <td className="py-3 px-4">
+                      <td className="py-3.5 px-4">
                         <div className="flex items-center gap-2">
                           <span className={`font-mono font-bold text-sm ${isSoldOut ? "text-danger" : "text-ink"}`}>
                             {product.availableQty}
@@ -277,7 +290,7 @@ export function StaffProductsPage() {
                             <button
                               type="button"
                               onClick={() => quickQtyMutation.mutate({ id: product.id, qty: product.availableQty - 1 })}
-                              className="rounded border border-line bg-cream px-1.5 py-0.5 text-[10px] font-bold hover:bg-paper"
+                              className="rounded-lg border border-line bg-cream px-2 py-0.5 text-[10px] font-bold hover:bg-paper"
                               title="Decrease by 1"
                             >
                               -1
@@ -285,15 +298,15 @@ export function StaffProductsPage() {
                             <button
                               type="button"
                               onClick={() => quickQtyMutation.mutate({ id: product.id, qty: product.availableQty + 5 })}
-                              className="rounded border border-line bg-cream px-1.5 py-0.5 text-[10px] font-bold hover:bg-paper"
-                              title="Add 5"
+                              className="rounded-lg border border-line bg-cream px-2 py-0.5 text-[10px] font-bold hover:bg-paper"
+                              title="Add 5 servings"
                             >
                               +5
                             </button>
                             <button
                               type="button"
                               onClick={() => quickQtyMutation.mutate({ id: product.id, qty: 0 })}
-                              className="rounded border border-danger/30 text-danger bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold hover:bg-rose-100"
+                              className="rounded-lg border border-danger/30 text-danger bg-rose-50 px-2 py-0.5 text-[10px] font-bold hover:bg-rose-100"
                               title="Set zero (Sold Out)"
                             >
                               0 (Sold Out)
@@ -302,23 +315,24 @@ export function StaffProductsPage() {
                         </div>
                       </td>
 
-                      <td className="py-3 px-4">
+                      <td className="py-3.5 px-4">
                         {isSoldOut ? (
                           <span className="inline-flex items-center gap-1 rounded-full bg-danger px-2.5 py-0.5 text-[10px] font-bold text-white shadow-sm">
                             <PackageX className="h-3 w-3" /> SOLD OUT
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-leaf-soft text-leaf px-2.5 py-0.5 text-[10px] font-semibold">
-                            <PackageCheck className="h-3 w-3" /> Available
+                          <span className="inline-flex items-center gap-1 rounded-full bg-leaf-soft text-leaf px-2.5 py-0.5 text-[10px] font-bold">
+                            <PackageCheck className="h-3 w-3" /> In Stock
                           </span>
                         )}
                       </td>
 
-                      <td className="py-3 px-4 text-right">
+                      <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           <Button
                             variant="outline"
-                            className="h-7 px-2 text-xs"
+                            size="sm"
+                            className="h-8 px-2.5 text-xs font-semibold"
                             onClick={() => openEdit(product)}
                           >
                             <Edit2 className="h-3 w-3 mr-1" /> Edit
@@ -326,14 +340,15 @@ export function StaffProductsPage() {
 
                           <Button
                             variant="ghost"
-                            className="h-7 px-2 text-xs text-danger hover:bg-rose-50"
+                            size="sm"
+                            className="h-8 px-2 text-xs text-danger hover:bg-rose-50"
                             onClick={() => {
-                              if (confirm(`Remove or deactivate ${product.name}?`)) {
+                              if (confirm(`Remove ${product.name} from active menu?`)) {
                                 deleteMutation.mutate(product.id);
                               }
                             }}
                           >
-                            <Trash2 className="h-3 w-3" />
+                            <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>
                       </td>
@@ -349,8 +364,9 @@ export function StaffProductsPage() {
       {/* Add / Edit Product Modal */}
       <Modal
         open={modalOpen}
-        title={editingProduct ? "Edit Dish Details" : "Add New Dish"}
+        title={editingProduct ? "Edit Dish Details" : "Add New Dish to Tupi Menu"}
         onClose={() => setModalOpen(false)}
+        maxWidth="max-w-lg"
       >
         <form onSubmit={handleFormSubmit} className="space-y-4 max-h-[75vh] overflow-y-auto pr-1 text-xs">
           <Field label="Dish Name">
@@ -383,7 +399,7 @@ export function StaffProductsPage() {
             <textarea
               required
               rows={3}
-              placeholder="Describe marinade, flavor, portion size..."
+              placeholder="Describe marinade, herbs, portion size in Tupi..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className={inputClass()}
@@ -432,7 +448,7 @@ export function StaffProductsPage() {
               id="activeCheckbox"
               checked={active}
               onChange={(e) => setActive(e.target.checked)}
-              className="h-4 w-4 rounded border-line text-roast accent-roast"
+              className="h-4 w-4 rounded border-line text-roast accent-roast cursor-pointer"
             />
             <label htmlFor="activeCheckbox" className="font-semibold text-ink cursor-pointer">
               Active on Customer Menu
@@ -451,9 +467,9 @@ export function StaffProductsPage() {
             <Button
               type="submit"
               loading={saveMutation.isPending}
-              className="flex-1"
+              className="flex-1 font-bold"
             >
-              {editingProduct ? "Save Changes" : "Create Product"}
+              {editingProduct ? "Save Changes" : "Create Dish"}
             </Button>
           </div>
         </form>

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -12,9 +12,11 @@ import {
   Check,
   ShieldCheck,
   Flame,
+  Phone,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { formatDateTime } from "@/lib/utils";
+import { sound } from "@/lib/sound";
 import { useRealtime } from "@/hooks/useRealtime";
 import { Button, Card, EmptyState, Skeleton } from "@/components/ui";
 import type { Alert } from "@/types";
@@ -35,6 +37,7 @@ export function StaffAlertsPage() {
   const ackMutation = useMutation({
     mutationFn: (id: string) => api(`/api/alerts/${id}/ack`, { method: "POST" }),
     onSuccess: () => {
+      sound.play("click");
       toast.success("Alert acknowledged.");
       void queryClient.invalidateQueries({ queryKey: ["alerts"] });
       void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
@@ -44,7 +47,8 @@ export function StaffAlertsPage() {
   const resolveMutation = useMutation({
     mutationFn: (id: string) => api(`/api/alerts/${id}/resolve`, { method: "POST" }),
     onSuccess: () => {
-      toast.success("Alert marked as resolved!");
+      sound.play("success");
+      toast.success("Alert resolved!");
       void queryClient.invalidateQueries({ queryKey: ["alerts"] });
       void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
@@ -62,18 +66,18 @@ export function StaffAlertsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-line pb-4">
         <div>
-          <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-danger">
+          <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-danger mb-1">
             <AlertTriangle className="h-4 w-4" />
-            <span>Operational Exception Alerts</span>
+            <span>Poblacion, Tupi Exception Alerts</span>
           </div>
-          <h1 className="display text-3xl font-bold text-ink mt-0.5">Alerts & Unclaimed Watcher</h1>
+          <h1 className="display text-3xl font-bold text-ink">Alerts & Unclaimed Watcher</h1>
           <p className="text-xs text-muted">
-            Monitors orders past their scheduled claim threshold and inventory low-stock / sold-out limits.
+            Monitors roast chicken orders exceeding claim times and tracks inventory threshold warnings.
           </p>
         </div>
 
         {/* Filter Tabs */}
-        <div className="flex rounded-xl bg-paper border border-line p-1 text-xs font-semibold">
+        <div className="flex rounded-2xl bg-paper border border-line p-1 text-xs font-semibold shadow-sm">
           {[
             { key: "OPEN", label: "Open Alerts" },
             { key: "ACKNOWLEDGED", label: "Acknowledged" },
@@ -83,9 +87,12 @@ export function StaffAlertsPage() {
             <button
               key={tab.key}
               type="button"
-              onClick={() => setStatusFilter(tab.key)}
-              className={`rounded-lg px-3 py-1.5 transition ${
-                statusFilter === tab.key ? "bg-roast text-white shadow-sm" : "text-muted hover:text-ink"
+              onClick={() => {
+                sound.play("click");
+                setStatusFilter(tab.key);
+              }}
+              className={`rounded-xl px-3 py-1.5 transition ${
+                statusFilter === tab.key ? "bg-roast text-white font-bold shadow-sm" : "text-muted hover:text-ink"
               }`}
             >
               {tab.label}
@@ -98,15 +105,15 @@ export function StaffAlertsPage() {
       {isLoading ? (
         <div className="space-y-3">
           {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-24 w-full rounded-2xl" />
+            <Skeleton key={i} className="h-24 w-full rounded-3xl" />
           ))}
         </div>
       ) : !alerts || alerts.length === 0 ? (
         <EmptyState
-          title="No Alerts Found"
+          title="All Clear!"
           body={
             statusFilter === "OPEN"
-              ? "All operations are running smoothly! No open unclaimed tickets or stock alerts."
+              ? "All Tupi operations running seamlessly! No overdue tickets or stock warnings."
               : `No alerts with status "${statusFilter}".`
           }
         />
@@ -120,14 +127,14 @@ export function StaffAlertsPage() {
                 key={alert.id}
                 className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 transition ${
                   isUnclaimed && alert.status === "OPEN"
-                    ? "border-2 border-red-500 bg-red-50/30"
+                    ? "border-2 border-red-500 bg-red-50/40 shadow-sm"
                     : alert.status === "OPEN"
                     ? "border-amber-400 bg-amber-50/20"
                     : "border-line bg-paper opacity-80"
                 }`}
               >
                 <div className="flex items-start gap-4 flex-1">
-                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-cream border border-line shadow-sm">
+                  <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-cream border border-line shadow-sm">
                     {getAlertIcon(alert.type)}
                   </div>
 
@@ -135,9 +142,9 @@ export function StaffAlertsPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-bold text-sm text-ink">{alert.message}</span>
                       <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+                        className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
                           alert.status === "OPEN"
-                            ? "bg-red-600 text-white"
+                            ? "bg-red-600 text-white shadow-sm"
                             : alert.status === "ACKNOWLEDGED"
                             ? "bg-amber-500 text-white"
                             : "bg-leaf-soft text-leaf"
@@ -169,11 +176,19 @@ export function StaffAlertsPage() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 shrink-0 border-t border-line/60 pt-3 sm:border-0 sm:pt-0">
+                  {alert.order?.customer?.phone && (
+                    <a href={`tel:${alert.order.customer.phone}`}>
+                      <Button variant="outline" size="sm" className="h-8 px-2.5 text-xs">
+                        <Phone className="h-3.5 w-3.5 mr-1 text-leaf" /> Call Customer
+                      </Button>
+                    </a>
+                  )}
+
                   {alert.order?.orderNumber && (
                     <Link to="/staff/queue">
-                      <Button variant="outline" className="h-8 px-3 text-xs">
+                      <Button variant="outline" size="sm" className="h-8 px-3 text-xs">
                         <Eye className="h-3.5 w-3.5 mr-1" />
-                        Kitchen Queue
+                        Queue
                       </Button>
                     </Link>
                   )}
@@ -181,7 +196,8 @@ export function StaffAlertsPage() {
                   {alert.status === "OPEN" && (
                     <Button
                       variant="outline"
-                      className="h-8 px-3 text-xs"
+                      size="sm"
+                      className="h-8 px-3 text-xs font-semibold"
                       onClick={() => ackMutation.mutate(alert.id)}
                       loading={ackMutation.isPending}
                     >
@@ -191,7 +207,8 @@ export function StaffAlertsPage() {
 
                   {alert.status !== "RESOLVED" && (
                     <Button
-                      className="h-8 px-3 text-xs"
+                      size="sm"
+                      className="h-8 px-3 text-xs font-bold shadow-sm"
                       onClick={() => resolveMutation.mutate(alert.id)}
                       loading={resolveMutation.isPending}
                     >

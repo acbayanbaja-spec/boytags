@@ -194,15 +194,15 @@ async function main() {
   await prisma.setting.create({
     data: {
       storeName: "Boytag's Lechon Manok and Chicken House",
-      storeAddress: "Maharlika Highway, Brgy. Dila, Santa Rosa, Laguna",
-      storePhone: "(049) 530-0192",
-      latitude: 14.3142,
-      longitude: 121.1114,
+      storeAddress: "South Cotabato - Sarangani Road, Poblacion, Tupi, South Cotabato",
+      storePhone: "(083) 228-1234 / 0917-123-4567",
+      latitude: 6.3333,
+      longitude: 124.9515,
       unclaimedThresholdMinutes: 20,
       deliveryFee: 40,
       lowStockThreshold: 5,
-      openingTime: "09:00",
-      closingTime: "21:00",
+      openingTime: "08:30",
+      closingTime: "20:30",
     },
   });
 
@@ -220,7 +220,7 @@ async function main() {
       subtotal: 415,
       deliveryFee: 40,
       total: 455,
-      customerNotes: "Please call when outside. Dogs in the yard.",
+      customerNotes: "Please call when outside. Extra spicy sawsawan if possible!",
       items: {
         create: [
           {
@@ -241,12 +241,12 @@ async function main() {
       },
       delivery: {
         create: {
-          address: "Blk 4 Lot 12, Villa Rosa Subdivision, Santa Rosa, Laguna",
-          landmark: "Blue gate beside the sari-sari store, near the barangay hall",
-          notes: "Leave with security if the gate is locked.",
+          address: "Purok 2, Poblacion, Tupi, South Cotabato",
+          landmark: "Near Tupi Municipal Gymnasium, yellow gate with mango tree",
+          notes: "Please call mobile or honk when outside.",
           contactPhone: "09192223333",
-          latitude: 14.3211,
-          longitude: 121.1182,
+          latitude: 6.3345,
+          longitude: 124.9525,
         },
       },
     },

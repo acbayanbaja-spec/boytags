@@ -1,19 +1,22 @@
 # Boytag's Lechon Manok & Chicken House — Ordering and Delivery Platform
 
-> A production-grade commercial ordering and delivery system engineered for **Boytag's Lechon Manok & Chicken House** (Maharlika Highway, Brgy. Dila, Santa Rosa, Laguna). Built with modern full-stack TypeScript/JavaScript, React 19, Express 5, PostgreSQL via Supabase, and Prisma ORM.
+> A production-grade commercial ordering, delivery, and Kitchen Display System (KDS) engineered for **Boytag's Lechon Manok & Chicken House** (South Cotabato - Sarangani Road, Poblacion, Tupi, South Cotabato). Built with modern full-stack TypeScript/JavaScript, React 19, Express 5, PostgreSQL via Supabase, Prisma ORM, and resilient dual-mode client dispatch.
 
 ---
 
 ## 1. Project Overview
 
-Boytag's ordering platform automates and streamlines fast-paced poultry restaurant operations. It replaces manual telephone and pen-and-paper order logs with a synchronized, real-time dispatch and kitchen queue system.
+Boytag's ordering platform automates and streamlines fast-paced poultry restaurant operations in **Poblacion, Tupi, South Cotabato**. It replaces manual telephone and pen-and-paper order logs with a synchronized, real-time dispatch, kitchen queue system, and customer ordering portal.
 
 Key operational problems solved:
-- **Intelligent Order Prioritization**: Organizes orders automatically by preparation readiness, scheduled pickup/delivery deadlines, and urgency level.
-- **Precision Doorstep Pinpointing**: Eliminates lost delivery riders with an interactive Leaflet GPS map picker, landmark guides, and rider contact directions.
-- **Automated Unclaimed Order Detection**: An active background cron daemon marks orders exceeding pickup/delivery thresholds as `UNCLAIMED` and sounds high-priority staff alerts.
+- **Poblacion, Tupi Precision Pinpointing**: Interactive Leaflet GPS map centered directly on Tupi, South Cotabato (`6.3333, 124.9515`) with landmark references and doorstep rider instructions.
+- **Culinary Customizer Engine**: Tailor orders with cut preferences (Whole, 4 pcs, 8 pcs), authentic Filipino sawsawan dipping sauces (House Garlic Liver Gravy, Toyomansi & Labuyo, Spiced Sinamak), and add-on garlic rice.
+- **Dual-View Kitchen Display System (KDS)**: Kanban rail & grid ticket management with real-time stage timers and printable 80mm thermal kitchen slips.
+- **Printable Thermal Customer Receipts**: Commercial standard itemized receipts with barcodes and non-VAT register formats.
+- **Zero-Dependency Web Audio FX**: Low-latency synthesized sound engine with sound effects for additions, advances, and urgent alerts.
+- **Dual-Mode Resilient Architecture**: Connects to live Express API / PostgreSQL, gracefully falling back to a full local simulation store when deployed on static previews so every single button works.
 - **Race-Condition-Safe Inventory**: Atomic database transactions decrement product stock on checkout and automatically tag zero-stock items as **SOLD OUT** to prevent overselling.
-- **Immutable Order Change History**: Tracks every order creation, line-item update, schedule revision, cancellation, and staff status change with full previous/new diffs.
+- **Automated Unclaimed Order Detection**: An active background cron daemon marks orders exceeding pickup/delivery thresholds as `UNCLAIMED` and sounds high-priority staff alerts.
 
 ---
 
@@ -219,6 +222,41 @@ npm run dev
 - Every creation, item modification, schedule change, delivery note update, cancellation, or staff status advance logs a record to `OrderHistory`:
   - `actorName`, `actorRole`, `action`, `previousValue`, `newValue`, `createdAt`.
 - Rendered on the tracking view and staff queue inspection dialog as an animated timeline.
+
+### F. Culinary Dish Customizer Modal
+- Customizer modal (`client/src/components/DishCustomizerModal.tsx`) allows customers to specify:
+  - Cutting preference: Whole roast chicken, quartered (4 pcs), or 8-piece party cut.
+  - Authentic sawsawan selection: House Garlic Liver Gravy, Toyomansi & Labuyo, Spiced Sinamak Vinegar, Sweet Chili Glaze.
+  - Add-on fragrant garlic rice and extra sauce cups.
+  - Special kitchen requests (e.g., extra crispy skin, sauces packed separately).
+
+### G. Kitchen Display System (KDS) & 80mm Thermal Slips
+- Staff KDS (`client/src/pages/staff/QueuePage.tsx`) provides:
+  - Dual-mode view: Kitchen Kanban Rail grouped by stage (`PENDING`, `CONFIRMED`, `PREPARING`, `READY`, `OUT_FOR_DELIVERY`) or Dense Ticket Grid.
+  - Live elapsed preparation timer per ticket with urgent visual pulsing when prep exceeds target time.
+  - Direct 80mm thermal kitchen prep slip modal (`client/src/components/KitchenTicketModal.tsx`) formatted with station checkboxes, order notes, and print styling.
+
+### H. Printable Customer Thermal Receipts
+- Official non-VAT customer receipt modal (`client/src/components/ReceiptModal.tsx`):
+  - Formatted with store header: Poblacion, Tupi, South Cotabato (`(083) 228-1234`).
+  - Barcode representation, itemized breakdown, discounts, delivery fees, customer information, and cashier signature.
+  - Dedicated print stylesheet (`@media print`) for clean pos receipt generation.
+
+### I. Customer 5-Star Reviews & Rating Modal
+- After order completion, customers can submit 5-star ratings (`client/src/components/RatingModal.tsx`):
+  - Interactive star selection with glowing ember accents.
+  - Compliment chips: *Juiciest Chicken*, *Crispy Skin*, *Fast Delivery*, *Generous Gravy*, *Friendly Rider*.
+  - Feedback comments submitted to the platform.
+
+### J. Zero-Dependency Web Audio Synthesizer Engine
+- High-fidelity Web Audio API engine (`client/src/lib/sound.ts`):
+  - Custom synthesized waveforms for UI clicks, adding items to cart, advancing ticket stages, success confirmations, and emergency kitchen chimes.
+  - Persistent sound toggle in the navigation bar respecting user preferences.
+
+### K. Resilient Dual-Mode API & Fallback Store
+- Smart client dispatcher (`client/src/lib/api.ts` & `client/src/lib/mockStore.ts`):
+  - Direct connection to Express REST API & PostgreSQL database.
+  - Instant automatic fallback to comprehensive `localStorage` simulation if offline or on static CDN deployments, guaranteeing 100% of buttons, logins, orders, and dashboard features work without throwing unhandled network errors.
 
 ---
 

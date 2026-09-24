@@ -18,6 +18,14 @@ export type User = {
   role: Role;
 };
 
+export type Category = {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  sortOrder?: number;
+};
+
 export type Product = {
   id: string;
   name: string;
