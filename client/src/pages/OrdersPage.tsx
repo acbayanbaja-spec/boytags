@@ -47,7 +47,7 @@ export function OrdersPage() {
           slug: item.productName.toLowerCase().replace(/\s+/g, "-"),
           description: "Re-ordered specialty dish",
           price: item.unitPrice,
-          imageUrl: "https://images.unsplash.com/photo-1598103442097-8b70429476eb?auto=format&fit=crop&w=1200&q=80",
+          imageUrl: "/images/dishes/whole-lechon.jpg",
           availableQty: 20,
           soldOut: false,
           active: true,

@@ -37,6 +37,10 @@ export type Product = {
   soldOut: boolean;
   active: boolean;
   category: { id: string; name: string; slug: string };
+  badge?: string;
+  isSpicy?: boolean;
+  isBestseller?: boolean;
+  servings?: string;
 };
 
 export type OrderItem = {

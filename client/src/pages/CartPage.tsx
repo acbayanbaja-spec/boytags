@@ -17,6 +17,7 @@ import { useCart } from "@/context/CartContext";
 import { formatPeso } from "@/lib/utils";
 import { sound } from "@/lib/sound";
 import { Button, Card, EmptyState, inputClass } from "@/components/ui";
+import { DishImage } from "@/components/DishImage";
 import { toast } from "sonner";
 
 export function CartPage() {
@@ -122,9 +123,10 @@ export function CartPage() {
         <div className="space-y-4 lg:col-span-8">
           {items.map(({ product, quantity }) => (
             <Card key={product.id} className="flex flex-col sm:flex-row items-center gap-4 p-4 hover:shadow-md transition">
-              <img
+              <DishImage
                 src={product.imageUrl}
                 alt={product.name}
+                category={product.category?.name}
                 className="h-24 w-24 shrink-0 rounded-2xl object-cover bg-cream"
               />
 

@@ -206,7 +206,7 @@ export function StoreShell() {
               <span className="display text-xl font-bold">Boytag's</span>
             </div>
             <p className="text-[#c5b1a0] leading-relaxed">
-              Santa Rosa's beloved lechon manok house. Native garlic and lemongrass infused, roasted slowly over live charcoal for peerless crispiness.
+              Tupi's beloved lechon manok house. Native garlic and lemongrass infused, roasted slowly over live charcoal for peerless crispiness.
             </p>
           </div>
 
@@ -224,15 +224,15 @@ export function StoreShell() {
             <h4 className="font-bold uppercase tracking-wider text-amber-300">Store Hours & Branch</h4>
             <p className="flex items-start gap-1.5 text-[#c5b1a0]">
               <MapPin className="h-4 w-4 shrink-0 text-roast mt-0.5" />
-              <span>Maharlika Highway, Brgy. Dila, Santa Rosa, Laguna</span>
+              <span>South Cotabato - Sarangani Road, Poblacion, Tupi</span>
             </p>
             <p className="flex items-center gap-1.5 text-[#c5b1a0]">
               <Clock className="h-4 w-4 shrink-0 text-roast" />
-              <span>Open Daily: 9:00 AM – 9:00 PM</span>
+              <span>Open Daily: 8:30 AM – 8:30 PM</span>
             </p>
             <p className="flex items-center gap-1.5 text-[#c5b1a0]">
               <Phone className="h-4 w-4 shrink-0 text-roast" />
-              <span>Hotline: (049) 530-0192</span>
+              <span>Hotline: (083) 228-1234 / 0917-123-4567</span>
             </p>
           </div>
 

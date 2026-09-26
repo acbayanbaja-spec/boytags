@@ -17,6 +17,7 @@ import { formatPeso } from "@/lib/utils";
 import { sound } from "@/lib/sound";
 import { useRealtime } from "@/hooks/useRealtime";
 import { Button, Card, Field, Modal, Skeleton, inputClass } from "@/components/ui";
+import { DishImage } from "@/components/DishImage";
 import type { Product } from "@/types";
 import { toast } from "sonner";
 
@@ -130,7 +131,7 @@ export function StaffProductsPage() {
     setName("");
     setDescription("");
     setPrice("");
-    setImageUrl("https://images.unsplash.com/photo-1598103442097-8b70429476eb?auto=format&fit=crop&w=1200&q=80");
+    setImageUrl("/images/dishes/whole-lechon.jpg");
     setAvailableQty("20");
     setCategoryId(categories?.[0]?.id || "");
     setActive(true);
@@ -261,9 +262,10 @@ export function StaffProductsPage() {
                     <tr key={product.id} className="hover:bg-cream/40 transition">
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-3">
-                          <img
+                          <DishImage
                             src={product.imageUrl}
                             alt={product.name}
+                            category={product.category?.name}
                             className="h-11 w-11 rounded-xl object-cover bg-cream shrink-0"
                           />
                           <div>
@@ -431,15 +433,72 @@ export function StaffProductsPage() {
             </Field>
           </div>
 
-          <Field label="Image URL">
+          <Field label="Image URL & Live Preview">
             <input
-              type="url"
+              type="text"
               required
-              placeholder="https://images.unsplash.com/..."
+              placeholder="/images/dishes/whole-lechon.jpg or https://..."
               value={imageUrl}
               onChange={(e) => setImageUrl(e.target.value)}
               className={inputClass()}
             />
+            {/* Quick preset selector */}
+            <div className="mt-2 space-y-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted">Quick Pick Preset Dish Photo:</span>
+              <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1 border border-line/60 rounded-xl bg-cream/40">
+                {[
+                  { label: "Whole Lechon", url: "/images/dishes/whole-lechon.jpg" },
+                  { label: "Half Lechon", url: "/images/dishes/half-lechon.jpg" },
+                  { label: "Spicy Lechon", url: "/images/dishes/spicy-lechon.jpg" },
+                  { label: "Grilled Liempo", url: "/images/dishes/liempo.jpg" },
+                  { label: "Chicken Inasal", url: "/images/dishes/inasal.jpg" },
+                  { label: "Fried Chicken", url: "/images/dishes/fried.jpg" },
+                  { label: "Sizzling Sisig", url: "/images/dishes/sisig.jpg" },
+                  { label: "Grilled Bangus", url: "/images/dishes/bangus.jpg" },
+                  { label: "Fiesta Bilao", url: "/images/dishes/fiesta-bilao.jpg" },
+                  { label: "Java Rice", url: "/images/dishes/java-rice.jpg" },
+                  { label: "Garlic Rice", url: "/images/dishes/garlic-rice.jpg" },
+                  { label: "Sawsawan", url: "/images/dishes/sawsawan.jpg" },
+                  { label: "Atchara", url: "/images/dishes/atchara.jpg" },
+                  { label: "Calamansi", url: "/images/dishes/calamansi.jpg" },
+                  { label: "Sago Gulaman", url: "/images/dishes/sago.jpg" },
+                  { label: "Buko Pandan", url: "/images/dishes/buko-pandan.jpg" },
+                  { label: "Halo-Halo", url: "/images/dishes/halo-halo.jpg" },
+                ].map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => {
+                      sound.play("click");
+                      setImageUrl(preset.url);
+                    }}
+                    className={`rounded-lg px-2 py-1 text-[11px] font-semibold transition ${
+                      imageUrl === preset.url
+                        ? "bg-roast text-white shadow-xs"
+                        : "bg-paper border border-line text-ink hover:border-roast/40"
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Live Preview Card */}
+            {imageUrl && (
+              <div className="mt-3 flex items-center gap-3 rounded-2xl bg-cream border border-line p-2.5">
+                <DishImage
+                  src={imageUrl}
+                  alt={name || "Dish Preview"}
+                  className="h-16 w-16 rounded-xl object-cover shrink-0"
+                />
+                <div className="min-w-0 flex-1">
+                  <span className="text-[10px] uppercase font-bold text-muted tracking-wider">Live Image Preview</span>
+                  <p className="font-bold text-xs text-ink truncate">{name || "Dish Name"}</p>
+                  <p className="text-[11px] text-roast font-bold mt-0.5">{price ? formatPeso(Number(price)) : "₱0.00"}</p>
+                </div>
+              </div>
+            )}
           </Field>
 
           <div className="flex items-center gap-2 pt-2">

@@ -23,6 +23,7 @@ import { formatPeso } from "@/lib/utils";
 import { sound } from "@/lib/sound";
 import { useCart } from "@/context/CartContext";
 import { Button, Card, Skeleton } from "@/components/ui";
+import { DishImage } from "@/components/DishImage";
 import { DishCustomizerModal } from "@/components/DishCustomizerModal";
 import type { Product } from "@/types";
 import { toast } from "sonner";
@@ -118,8 +119,8 @@ export function HomePage() {
               className="relative mx-auto max-w-md overflow-hidden rounded-3xl border border-white/15 bg-white/5 p-3.5 shadow-2xl backdrop-blur-md"
             >
               <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl">
-                <img
-                  src="https://images.unsplash.com/photo-1598103442097-8b70429476eb?auto=format&fit=crop&w=800&q=80"
+                <DishImage
+                  src="/images/dishes/whole-lechon.jpg"
                   alt="Boytag's Whole Lechon Manok"
                   className="h-full w-full object-cover transition duration-500 hover:scale-105"
                 />
@@ -231,14 +232,19 @@ export function HomePage() {
                   className="group overflow-hidden p-0 flex flex-col justify-between hover:shadow-xl transition hover:border-roast/30"
                 >
                   <div className="relative aspect-[4/3] overflow-hidden bg-cream">
-                    <img
+                    <DishImage
                       src={product.imageUrl}
                       alt={product.name}
+                      category={product.category?.name}
                       className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                     />
                     {isOut ? (
                       <span className="absolute left-3 top-3 rounded-full bg-danger px-3 py-1 text-xs font-bold text-white shadow-md">
                         SOLD OUT
+                      </span>
+                    ) : product.badge ? (
+                      <span className="absolute left-3 top-3 rounded-full bg-roast/90 backdrop-blur-sm px-2.5 py-0.5 text-xs font-bold text-white shadow-sm">
+                        {product.badge}
                       </span>
                     ) : product.availableQty <= 5 ? (
                       <span className="absolute left-3 top-3 rounded-full bg-amber-600 px-3 py-1 text-xs font-semibold text-white shadow-md">

@@ -32,6 +32,7 @@ import { OrderTimeline } from "@/components/OrderTimeline";
 import { ReceiptModal } from "@/components/ReceiptModal";
 import { RatingModal } from "@/components/RatingModal";
 import { Button, Card, Field, Modal, Skeleton, StatusBadge, inputClass } from "@/components/ui";
+import { DishImage } from "@/components/DishImage";
 import { STATUS_LABEL, type Order, type OrderStatus } from "@/types";
 import { toast } from "sonner";
 
@@ -332,11 +333,18 @@ export function OrderTrackingPage() {
             <div className="divide-y divide-line">
               {order.items.map((item) => (
                 <div key={item.id} className="py-3 flex items-center justify-between text-xs sm:text-sm">
-                  <div className="space-y-0.5">
-                    <p className="font-bold text-ink">{item.productName}</p>
-                    <p className="text-muted text-[11px]">
-                      {item.quantity} × {formatPeso(item.unitPrice)}
-                    </p>
+                  <div className="flex items-center gap-3">
+                    <DishImage
+                      src=""
+                      alt={item.productName}
+                      className="h-10 w-10 rounded-xl object-cover shrink-0"
+                    />
+                    <div className="space-y-0.5">
+                      <p className="font-bold text-ink">{item.productName}</p>
+                      <p className="text-muted text-[11px]">
+                        {item.quantity} × {formatPeso(item.unitPrice)}
+                      </p>
+                    </div>
                   </div>
                   <span className="font-bold text-ink">{formatPeso(item.lineTotal)}</span>
                 </div>

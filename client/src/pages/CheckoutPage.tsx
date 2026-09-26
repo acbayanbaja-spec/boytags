@@ -7,6 +7,7 @@ import { formatPeso } from "@/lib/utils";
 import { sound } from "@/lib/sound";
 import { LocationPicker, TUPI_BOYTAGS_COORDS } from "@/components/MapPin";
 import { Button, Card, Field, inputClass, Modal } from "@/components/ui";
+import { DishImage } from "@/components/DishImage";
 import {
   Store,
   Truck,
@@ -485,9 +486,10 @@ export function CheckoutPage() {
               {items.map(({ product, quantity }) => (
                 <div key={product.id} className="py-3 flex items-center justify-between text-xs sm:text-sm">
                   <div className="flex items-center gap-3">
-                    <img
+                    <DishImage
                       src={product.imageUrl}
                       alt={product.name}
+                      category={product.category?.name}
                       className="h-10 w-10 rounded-xl object-cover bg-cream"
                     />
                     <div>
