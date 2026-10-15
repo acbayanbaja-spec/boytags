@@ -288,3 +288,48 @@ export function PasswordStrengthMeter({ password }: { password: string }) {
     </div>
   );
 }
+
+export function SafeImage({
+  src,
+  alt,
+  className,
+  fallbackSrc = "/images/whole-lechon-manok.jpg",
+  ...props
+}: React.ImgHTMLAttributes<HTMLImageElement> & { fallbackSrc?: string }) {
+  const [imgSrc, setImgSrc] = useState(src || fallbackSrc);
+  const [loaded, setLoaded] = useState(false);
+  const [isBroken, setIsBroken] = useState(false);
+
+  useEffect(() => {
+    setImgSrc(src || fallbackSrc);
+    setIsBroken(false);
+    setLoaded(false);
+  }, [src, fallbackSrc]);
+
+  return (
+    <div className={cn("relative overflow-hidden bg-cream/70", className)}>
+      {!loaded && !isBroken && (
+        <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-cream via-line/40 to-cream" />
+      )}
+      <img
+        src={isBroken ? fallbackSrc : imgSrc}
+        alt={alt}
+        loading="lazy"
+        decoding="async"
+        onLoad={() => setLoaded(true)}
+        onError={() => {
+          if (!isBroken) {
+            setIsBroken(true);
+            setImgSrc(fallbackSrc);
+          }
+        }}
+        className={cn(
+          "h-full w-full object-cover transition-opacity duration-300",
+          loaded || isBroken ? "opacity-100" : "opacity-0",
+        )}
+        {...props}
+      />
+    </div>
+  );
+}
+

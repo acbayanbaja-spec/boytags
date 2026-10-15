@@ -25,12 +25,17 @@ export function ReceiptModal({
         <div className="print-area rounded-2xl border border-line bg-paper p-6 text-ink shadow-sm space-y-4 font-mono text-xs">
           {/* Header */}
           <div className="text-center space-y-1 border-b border-dashed border-line pb-4">
+            {order.isSimulated && (
+              <div className="mb-2 rounded-lg border border-gold/40 bg-amber-50/80 p-1.5 text-center text-[10px] font-sans font-bold text-amber-900 uppercase tracking-wider">
+                ⚠️ Local Simulation Mode • Test Transaction Only
+              </div>
+            )}
             <div className="inline-flex items-center gap-1.5 font-sans font-bold text-base text-roast">
               <Flame className="h-5 w-5" />
               <span>BOYTAG'S LECHON MANOK</span>
             </div>
-            <p className="text-[11px] text-muted">Maharlika Highway, Brgy. Dila, Santa Rosa, Laguna</p>
-            <p className="text-[11px] text-muted">Hotline: (049) 530-0192 / 0917-123-4567</p>
+            <p className="text-[11px] text-muted">South Cotabato - Sarangani Road, Poblacion, Tupi, South Cotabato</p>
+            <p className="text-[11px] text-muted">Hotline: (083) 228-1234 / 0917-123-4567</p>
             <p className="text-[10px] text-muted uppercase tracking-wider">BIR Non-VAT Reg: 442-910-388-000</p>
           </div>
 

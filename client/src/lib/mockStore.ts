@@ -1,13 +1,15 @@
 import type { Alert, Category, NotificationItem, Order, OrderStatus, Product, User } from "@/types";
 
 const images = {
-  whole: "https://images.unsplash.com/photo-1598103442097-8b70429476eb?auto=format&fit=crop&w=1200&q=80",
-  half: "https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?auto=format&fit=crop&w=1200&q=80",
-  inasal: "https://images.unsplash.com/photo-1527477396000-e27163b481c2?auto=format&fit=crop&w=1200&q=80",
+  whole: "/images/whole-lechon-manok.jpg",
+  half: "/images/half-lechon-manok.jpg",
+  spicy: "/images/spicy-labuyo-lechon-manok.jpg",
+  bilao: "/images/barkada-fiesta-roast-bilao.jpg",
+  inasal: "/images/chicken-inasal.jpg",
   fried: "https://images.unsplash.com/photo-1626645738196-c2a7c87a8f58?auto=format&fit=crop&w=1200&q=80",
-  liempo: "https://images.unsplash.com/photo-1544025162-d76690232f46?auto=format&fit=crop&w=1200&q=80",
-  rice: "https://images.unsplash.com/photo-1516684738272-bd2d19e0a4aa?auto=format&fit=crop&w=1200&q=80",
-  drinks: "https://images.unsplash.com/photo-1544145945-f9049b5f6440?auto=format&fit=crop&w=1200&q=80",
+  liempo: "/images/grilled-liempo.jpg",
+  rice: "https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&w=1200&q=80",
+  drinks: "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=1200&q=80",
   sauce: "https://images.unsplash.com/photo-1472476443507-c7a5948772fc?auto=format&fit=crop&w=1200&q=80",
 };
 
@@ -47,24 +49,56 @@ export const INITIAL_PRODUCTS: Product[] = [
     id: "prod_whole",
     name: "Whole Lechon Manok",
     slug: "whole-lechon-manok",
-    description: "Crisp golden skin, tender meat, and our signature garlic-lemongrass marinade. Serves 4–5.",
+    description: "Crisp golden crackling skin, juicy meat, and our signature garlic-lemongrass marinade roasted slowly over live hardwood charcoal. Serves 4–5.",
     price: 380,
     imageUrl: images.whole,
     availableQty: 24,
     soldOut: false,
     active: true,
+    bestseller: true,
+    featured: true,
     category: { id: "cat_lechon", name: "Lechon Manok", slug: "lechon-manok" },
   },
   {
     id: "prod_half",
     name: "Half Lechon Manok",
     slug: "half-lechon-manok",
-    description: "The same roast chicken, sized for a pair or a generous solo dinner in Tupi.",
+    description: "The same authentic roast chicken, sized for a pair or a generous solo dinner in Tupi. Serves 2–3.",
     price: 210,
     imageUrl: images.half,
     availableQty: 18,
     soldOut: false,
     active: true,
+    bestseller: true,
+    featured: true,
+    category: { id: "cat_lechon", name: "Lechon Manok", slug: "lechon-manok" },
+  },
+  {
+    id: "prod_spicy",
+    name: "Spicy Labuyo Lechon Manok",
+    slug: "spicy-labuyo-lechon-manok",
+    description: "Charcoal-roasted whole chicken infused with fiery Mindanao sili labuyo chili oil glaze and aromatic lemongrass. Serves 4–5.",
+    price: 395,
+    imageUrl: images.spicy,
+    availableQty: 16,
+    soldOut: false,
+    active: true,
+    bestseller: true,
+    featured: true,
+    category: { id: "cat_lechon", name: "Lechon Manok", slug: "lechon-manok" },
+  },
+  {
+    id: "prod_bilao",
+    name: "Barkada Fiesta Roast Bilao",
+    slug: "barkada-fiesta-roast-bilao",
+    description: "Grand native bamboo bilao feast with chopped whole roast chicken, grilled liempo, chicken inasal, java rice, and house sawsawan. Serves 6–8.",
+    price: 999,
+    imageUrl: images.bilao,
+    availableQty: 12,
+    soldOut: false,
+    active: true,
+    bestseller: true,
+    featured: true,
     category: { id: "cat_lechon", name: "Lechon Manok", slug: "lechon-manok" },
   },
   {
@@ -98,7 +132,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     description: "Juicy pork belly, charcoal-kissed over coconut hardwood with atchara.",
     price: 185,
     imageUrl: images.liempo,
-    availableQty: 12,
+    availableQty: 14,
     soldOut: false,
     active: true,
     category: { id: "cat_grilled", name: "Grilled & Fried", slug: "grilled-fried" },
@@ -179,6 +213,7 @@ export const INITIAL_ORDERS: Order[] = [
     customerNotes: "Please call when outside. Extra spicy sawsawan if possible!",
     createdAt: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
     updatedAt: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
+    isSimulated: true,
     customer: INITIAL_USERS[2],
     items: [
       {
@@ -405,6 +440,13 @@ class MockBackend {
 
   private load() {
     try {
+      const STORE_VERSION = "boytags.mock.v4";
+      if (typeof window !== "undefined" && localStorage.getItem("boytags.mock.ver") !== STORE_VERSION) {
+        localStorage.removeItem("boytags.mock.products");
+        localStorage.removeItem("boytags.mock.categories");
+        localStorage.setItem("boytags.mock.ver", STORE_VERSION);
+      }
+
       const u = localStorage.getItem("boytags.mock.users");
       this.users = u ? JSON.parse(u) : INITIAL_USERS;
 
@@ -627,6 +669,7 @@ class MockBackend {
       customerNotes: payload.customerNotes,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      isSimulated: true,
       items: orderItems,
       delivery: payload.delivery || null,
       history: [

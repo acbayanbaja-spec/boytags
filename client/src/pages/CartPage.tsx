@@ -120,7 +120,7 @@ export function CartPage() {
       <div className="grid gap-8 lg:grid-cols-12">
         {/* Items List */}
         <div className="space-y-4 lg:col-span-8">
-          {items.map(({ product, quantity }) => (
+          {items.map(({ product, quantity, customization }) => (
             <Card key={product.id} className="flex flex-col sm:flex-row items-center gap-4 p-4 hover:shadow-md transition">
               <img
                 src={product.imageUrl}
@@ -138,6 +138,26 @@ export function CartPage() {
                 <p className="text-xs text-muted">
                   {product.category?.name || "Main"} • {formatPeso(product.price)} each
                 </p>
+
+                {customization && (
+                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-1.5 pt-1">
+                    {customization.cut && (
+                      <span className="rounded-lg bg-roast/10 px-2 py-0.5 text-[10px] font-bold text-roast border border-roast/20">
+                        ✂️ {customization.cut}
+                      </span>
+                    )}
+                    {customization.sauce && (
+                      <span className="rounded-lg bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-800 border border-amber-500/20">
+                        🥣 {customization.sauce}
+                      </span>
+                    )}
+                    {customization.specialNotes && (
+                      <span className="rounded-lg bg-cream px-2 py-0.5 text-[10px] italic text-muted border border-line">
+                        "{customization.specialNotes}"
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 {product.availableQty < quantity && (
                   <p className="text-xs text-danger font-medium">

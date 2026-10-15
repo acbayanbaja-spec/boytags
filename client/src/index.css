@@ -4,20 +4,20 @@
 @theme {
   --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Fraunces", Georgia, "Times New Roman", serif;
-  --color-ink: #1c1410;
-  --color-muted: #6d5e52;
-  --color-line: #eadfce;
-  --color-cream: #f7f2eb;
-  --color-paper: #fffcf7;
-  --color-roast: #c2410c;
-  --color-roast-deep: #9a3412;
-  --color-amber-gold: #d97706;
-  --color-gold: #b8860b;
-  --color-leaf: #2e6616;
-  --color-leaf-soft: #ecfccb;
-  --color-danger: #b91c1c;
-  --shadow-card: 0 16px 36px -18px rgb(28 20 16 / 0.12), 0 0 0 1px rgb(234 223 206 / 0.7);
-  --shadow-glow: 0 0 24px -4px rgba(194, 65, 12, 0.35);
+  --color-ink: #211711;
+  --color-muted: #75675B;
+  --color-line: #E8DED0;
+  --color-cream: #F5F1E9;
+  --color-paper: #FFFCF7;
+  --color-roast: #C64212;
+  --color-roast-deep: #9F340D;
+  --color-amber-gold: #D9A441;
+  --color-gold: #D9A441;
+  --color-leaf: #2E6616;
+  --color-leaf-soft: #ECFCCB;
+  --color-danger: #B91C1C;
+  --shadow-card: 0 12px 32px -16px rgb(33 23 17 / 0.08), 0 0 0 1px rgb(232 222 208 / 0.85);
+  --shadow-glow: 0 0 24px -4px rgba(198, 66, 18, 0.35);
 }
 
 html,

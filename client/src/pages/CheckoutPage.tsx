@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
-import { api } from "@/lib/api";
+import { api, useSimulationMode } from "@/lib/api";
 import { formatPeso } from "@/lib/utils";
 import { sound } from "@/lib/sound";
 import { LocationPicker, TUPI_BOYTAGS_COORDS } from "@/components/MapPin";
@@ -28,6 +28,7 @@ export function CheckoutPage() {
   const { user } = useAuth();
   const { items, subtotal, clear } = useCart();
   const navigate = useNavigate();
+  const isSimulating = useSimulationMode();
 
   const [orderType, setOrderType] = useState<OrderType>("DELIVERY");
   const [scheduleMode, setScheduleMode] = useState<"asap" | "custom">("asap");
@@ -112,10 +113,26 @@ export function CheckoutPage() {
     setLoading(true);
 
     try {
+      const itemPrepNotes = items
+        .filter((i) => i.customization && (i.customization.cut || i.customization.sauce || i.customization.specialNotes))
+        .map(
+          (i) =>
+            `[${i.product.name}: ${[
+              i.customization?.cut,
+              i.customization?.sauce,
+              i.customization?.specialNotes ? `"${i.customization.specialNotes}"` : null,
+            ]
+              .filter(Boolean)
+              .join(" | ")}]`,
+        )
+        .join(" ");
+
+      const combinedNotes = [customerNotes.trim(), itemPrepNotes].filter(Boolean).join(" • ");
+
       const payload = {
         type: orderType,
         scheduledAt,
-        customerNotes: customerNotes.trim() || undefined,
+        customerNotes: combinedNotes || undefined,
         items: items.map((i) => ({
           productId: i.product.id,
           quantity: i.quantity,
@@ -140,7 +157,11 @@ export function CheckoutPage() {
 
       sound.play("success");
       clear();
-      toast.success(`Order placed! Reference: ${order.orderNumber}`);
+      if (order.isSimulated || isSimulating) {
+        toast.info(`Demo Order placed! Ref: ${order.orderNumber} (Simulation Mode)`);
+      } else {
+        toast.success(`Order placed! Reference: ${order.orderNumber}`);
+      }
       navigate(`/orders/${order.id}`);
     } catch (err) {
       sound.play("alert");
@@ -525,6 +546,18 @@ export function CheckoutPage() {
                 Payment mode: {paymentMethod === "COD" ? (orderType === "DELIVERY" ? "Cash on Delivery" : "Cash at Counter") : paymentMethod}
               </p>
             </div>
+
+            {isSimulating && (
+              <div className="rounded-xl border border-gold/40 bg-gold/10 p-3 text-xs text-amber-950 flex items-start gap-2.5">
+                <AlertCircle className="h-4 w-4 text-gold shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold">Offline Simulation Mode Active</p>
+                  <p className="text-muted text-[11px] leading-relaxed">
+                    Database server is disconnected. This order will run in browser simulation mode for demonstration and testing. No real financial transaction will occur.
+                  </p>
+                </div>
+              </div>
+            )}
 
             <Button
               type="submit"

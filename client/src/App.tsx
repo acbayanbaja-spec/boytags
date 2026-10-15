@@ -60,7 +60,14 @@ export function App() {
               {/* Customer Facing Store Routes */}
               <Route path="/" element={<StoreShell />}>
                 <Route index element={<HomePage />} />
-                <Route path="menu" element={<MenuPage />} />
+                <Route
+                  path="menu"
+                  element={
+                    <RequireAuth>
+                      <MenuPage />
+                    </RequireAuth>
+                  }
+                />
                 <Route path="cart" element={<CartPage />} />
                 <Route
                   path="checkout"

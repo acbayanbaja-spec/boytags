@@ -23,7 +23,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import { useRealtime } from "@/hooks/useRealtime";
-import { api } from "@/lib/api";
+import { api, useSimulationMode } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { Button, SoundToggle } from "@/components/ui";
 import type { Order } from "@/types";
@@ -50,6 +50,7 @@ export function StoreShell() {
   const { user, logout } = useAuth();
   const { count } = useCart();
   const navigate = useNavigate();
+  const isSimulating = useSimulationMode();
   useRealtime();
 
   // Check unread notifications
@@ -72,7 +73,13 @@ export function StoreShell() {
     ["PENDING", "CONFIRMED", "PREPARING", "READY", "OUT_FOR_DELIVERY"].includes(o.status),
   );
 
+  const isCustomer = user?.role === "CUSTOMER";
   const isStaff = user && (user.role === "STAFF" || user.role === "ADMIN");
+
+  function handleLogout() {
+    logout();
+    navigate("/", { replace: true });
+  }
 
   return (
     <div className="min-h-screen bg-cream pb-20 md:pb-0 flex flex-col justify-between">
@@ -82,31 +89,57 @@ export function StoreShell() {
           <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
             <Brand />
 
-            {/* Desktop Navigation */}
+            {/* Desktop Navigation - Role & Auth Protected */}
             <nav className="hidden items-center gap-7 text-sm font-semibold md:flex">
               <NavLink to="/" className={navClass}>
                 Home
               </NavLink>
-              <NavLink to="/menu" className={navClass}>
-                Menu
-              </NavLink>
-              <NavLink to="/orders" className={navClass}>
-                My Orders
-              </NavLink>
-              {isStaff ? (
-                <NavLink
-                  to="/staff"
-                  className="rounded-full bg-roast/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-roast transition hover:bg-roast/20"
-                >
-                  Kitchen Dispatch →
-                </NavLink>
-              ) : null}
+
+              {/* Show Menu & Orders only to authenticated customers */}
+              {isCustomer && (
+                <>
+                  <NavLink to="/menu" className={navClass}>
+                    Menu
+                  </NavLink>
+                  <NavLink to="/orders" className={navClass}>
+                    My Orders
+                  </NavLink>
+                </>
+              )}
+
+              {/* Show Operations links only to Staff / Admin */}
+              {isStaff && (
+                <>
+                  <NavLink
+                    to="/staff"
+                    className="rounded-full bg-roast/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-roast transition hover:bg-roast/20"
+                  >
+                    Kitchen Dispatch →
+                  </NavLink>
+                  <NavLink to="/staff/queue" className={navClass}>
+                    Queue
+                  </NavLink>
+                  <NavLink to="/staff/products" className={navClass}>
+                    Inventory
+                  </NavLink>
+                </>
+              )}
             </nav>
 
             {/* Action Buttons */}
             <div className="flex items-center gap-2">
+              {isSimulating && (
+                <span
+                  title="Running in local reactive simulation mode (database server offline)"
+                  className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-gold/40 bg-gold/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-900"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-gold animate-pulse" />
+                  <span>Demo Mode</span>
+                </span>
+              )}
               <SoundToggle />
 
+              {/* Notifications: only for logged in users */}
               {user ? (
                 <Link
                   to="/notifications"
@@ -123,7 +156,7 @@ export function StoreShell() {
                 </Link>
               ) : null}
 
-              {/* Cart Button */}
+              {/* Cart Button: Available to all, retains items */}
               <Link
                 to="/cart"
                 className="relative rounded-full p-2 text-ink hover:bg-line/60 transition"
@@ -137,11 +170,11 @@ export function StoreShell() {
                 ) : null}
               </Link>
 
-              {/* Auth / Profile */}
+              {/* Auth / Account Controls */}
               {user ? (
                 <div className="hidden sm:flex items-center gap-2 pl-1">
                   <Link
-                    to="/profile"
+                    to={isStaff ? "/staff" : "/profile"}
                     className="flex items-center gap-2 rounded-xl border border-line bg-paper px-3 py-1.5 text-xs font-semibold text-ink hover:border-roast/40 transition"
                   >
                     <span className="grid h-6 w-6 place-items-center rounded-lg bg-cream font-bold text-roast text-[11px]">
@@ -152,18 +185,23 @@ export function StoreShell() {
                   <Button
                     variant="ghost"
                     className="h-8 px-2 text-xs text-muted hover:text-danger"
-                    onClick={logout}
+                    onClick={handleLogout}
                     title="Sign Out"
                   >
                     <LogOut className="h-4 w-4" />
                   </Button>
                 </div>
               ) : (
-                <Link to="/login">
-                  <Button size="sm" className="shadow-sm">
-                    Sign in
-                  </Button>
-                </Link>
+                <div className="flex items-center gap-2">
+                  <Link to="/login?mode=register" className="hidden sm:inline-block text-xs font-semibold text-muted hover:text-roast transition">
+                    Register
+                  </Link>
+                  <Link to="/login">
+                    <Button size="sm" className="shadow-sm font-bold">
+                      Sign in
+                    </Button>
+                  </Link>
+                </div>
               )}
             </div>
           </div>
@@ -195,8 +233,8 @@ export function StoreShell() {
         </main>
       </div>
 
-      {/* High-End Culinary Footer */}
-      <footer className="mt-20 border-t border-line bg-[#20120a] text-[#ead8c8] pt-12 pb-16 px-4">
+      {/* Modern Filipino Roast House Culinary Footer */}
+      <footer className="mt-20 border-t border-line bg-[#211711] text-[#E8DED0] pt-12 pb-16 px-4">
         <div className="mx-auto max-w-6xl grid gap-8 md:grid-cols-4 text-xs">
           <div className="space-y-3 md:col-span-1">
             <div className="flex items-center gap-2 text-white">
@@ -206,17 +244,33 @@ export function StoreShell() {
               <span className="display text-xl font-bold">Boytag's</span>
             </div>
             <p className="text-[#c5b1a0] leading-relaxed">
-              Santa Rosa's beloved lechon manok house. Native garlic and lemongrass infused, roasted slowly over live charcoal for peerless crispiness.
+              Poblacion, Tupi's beloved lechon manok house. Native garlic and lemongrass infused, roasted slowly over live hardwood charcoal for peerless crispiness.
             </p>
           </div>
 
           <div className="space-y-2">
             <h4 className="font-bold uppercase tracking-wider text-amber-300">Quick Links</h4>
             <ul className="space-y-1.5 text-[#c5b1a0]">
-              <li><Link to="/menu" className="hover:text-white transition">Full Roast Menu</Link></li>
-              <li><Link to="/orders" className="hover:text-white transition">Track Your Order</Link></li>
-              <li><Link to="/login" className="hover:text-white transition">Customer Sign In</Link></li>
-              <li><Link to="/staff" className="hover:text-white transition">Kitchen Dispatch Portal</Link></li>
+              <li><Link to="/" className="hover:text-white transition">Home</Link></li>
+              {user ? (
+                <>
+                  {isCustomer && (
+                    <>
+                      <li><Link to="/menu" className="hover:text-white transition">Full Roast Menu</Link></li>
+                      <li><Link to="/orders" className="hover:text-white transition">Track Your Order</Link></li>
+                      <li><Link to="/profile" className="hover:text-white transition">My Profile</Link></li>
+                    </>
+                  )}
+                  {isStaff && (
+                    <li><Link to="/staff" className="hover:text-white transition">Kitchen Dispatch Portal</Link></li>
+                  )}
+                </>
+              ) : (
+                <>
+                  <li><Link to="/login" className="hover:text-white transition">Customer Sign In</Link></li>
+                  <li><Link to="/login?mode=register" className="hover:text-white transition">Create Free Account</Link></li>
+                </>
+              )}
             </ul>
           </div>
 
@@ -224,48 +278,78 @@ export function StoreShell() {
             <h4 className="font-bold uppercase tracking-wider text-amber-300">Store Hours & Branch</h4>
             <p className="flex items-start gap-1.5 text-[#c5b1a0]">
               <MapPin className="h-4 w-4 shrink-0 text-roast mt-0.5" />
-              <span>Maharlika Highway, Brgy. Dila, Santa Rosa, Laguna</span>
+              <span>South Cotabato - Sarangani Road, Poblacion, Tupi, South Cotabato</span>
             </p>
             <p className="flex items-center gap-1.5 text-[#c5b1a0]">
               <Clock className="h-4 w-4 shrink-0 text-roast" />
-              <span>Open Daily: 9:00 AM – 9:00 PM</span>
+              <span>Open Daily: 8:30 AM – 8:30 PM</span>
             </p>
             <p className="flex items-center gap-1.5 text-[#c5b1a0]">
               <Phone className="h-4 w-4 shrink-0 text-roast" />
-              <span>Hotline: (049) 530-0192</span>
+              <span>Hotline: (083) 228-1234 / 0917-123-4567</span>
             </p>
           </div>
 
           <div className="space-y-2">
-            <h4 className="font-bold uppercase tracking-wider text-amber-300">Boytag's Standard</h4>
+            <h4 className="font-bold uppercase tracking-wider text-amber-300">Boytag's Quality Standards</h4>
             <div className="space-y-1.5 text-[#c5b1a0]">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="h-4 w-4 text-leaf" />
-                <span>100% Fresh Charcoal Grilled</span>
+                <span>100% Charcoal Spit Roasted</span>
               </div>
               <div className="flex items-center gap-2">
                 <Sparkles className="h-4 w-4 text-amber-400" />
-                <span>Native Lemongrass Aromatics</span>
+                <span>Native Lemongrass & Garlic Aromatics</span>
               </div>
               <div className="flex items-center gap-2">
                 <Truck className="h-4 w-4 text-sky-400" />
-                <span>Direct Doorstep Pinpointing</span>
+                <span>Prompt Delivery in Poblacion & Nearby Barangays</span>
               </div>
             </div>
           </div>
         </div>
 
         <div className="mx-auto max-w-6xl mt-8 pt-6 border-t border-white/10 text-center text-[11px] text-[#a18c7c]">
-          © {new Date().getFullYear()} Boytag's Lechon Manok & Chicken House. All rights reserved.
+          © {new Date().getFullYear()} Boytag's Lechon Manok & Grill • Poblacion, Tupi, South Cotabato. All rights reserved.
         </div>
       </footer>
 
-      {/* Mobile Sticky Bottom Nav with Active Indicator */}
-      <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-line bg-paper/95 backdrop-blur-md md:hidden shadow-lg">
-        <MobileLink to="/" icon={<Store className="h-5 w-5" />} label="Home" />
-        <MobileLink to="/menu" icon={<UtensilsCrossed className="h-5 w-5" />} label="Menu" />
-        <MobileLink to="/orders" icon={<ClipboardList className="h-5 w-5" />} label="Orders" />
-        <MobileLink to="/profile" icon={<UserRound className="h-5 w-5" />} label="Profile" />
+      {/* Mobile Sticky Bottom Nav with Role & Auth Isolation */}
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-paper/95 backdrop-blur-md md:hidden shadow-lg">
+        {!user ? (
+          <div className="grid grid-cols-3">
+            <MobileLink to="/" icon={<Store className="h-5 w-5" />} label="Home" />
+            <MobileLink
+              to="/cart"
+              icon={
+                <div className="relative">
+                  <ShoppingBag className="h-5 w-5" />
+                  {count > 0 && (
+                    <span className="absolute -right-2 -top-1 grid h-4 w-4 place-items-center rounded-full bg-roast text-[9px] font-bold text-white">
+                      {count}
+                    </span>
+                  )}
+                </div>
+              }
+              label="Cart"
+            />
+            <MobileLink to="/login" icon={<UserRound className="h-5 w-5" />} label="Sign In" />
+          </div>
+        ) : isCustomer ? (
+          <div className="grid grid-cols-4">
+            <MobileLink to="/" icon={<Store className="h-5 w-5" />} label="Home" />
+            <MobileLink to="/menu" icon={<UtensilsCrossed className="h-5 w-5" />} label="Menu" />
+            <MobileLink to="/orders" icon={<ClipboardList className="h-5 w-5" />} label="Orders" />
+            <MobileLink to="/profile" icon={<UserRound className="h-5 w-5" />} label="Profile" />
+          </div>
+        ) : (
+          <div className="grid grid-cols-4">
+            <MobileLink to="/staff" icon={<LayoutDashboard className="h-5 w-5" />} label="Dash" />
+            <MobileLink to="/staff/queue" icon={<ClipboardList className="h-5 w-5" />} label="Queue" />
+            <MobileLink to="/staff/products" icon={<UtensilsCrossed className="h-5 w-5" />} label="Inventory" />
+            <MobileLink to="/staff/alerts" icon={<Bell className="h-5 w-5" />} label="Alerts" />
+          </div>
+        )}
       </nav>
     </div>
   );

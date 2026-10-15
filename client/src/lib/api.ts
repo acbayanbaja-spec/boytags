@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { mockBackend } from "./mockStore";
 import type { OrderStatus } from "@/types";
 
@@ -26,13 +27,71 @@ export function clearSession() {
   sessionStorage.removeItem("boytags.refresh");
 }
 
+let isBackendReachable = true;
+let isSimulating = false;
+let lastFailureTime = 0;
+const RETRY_INTERVAL_MS = 25000;
+
+type SimulationListener = (isSimulating: boolean) => void;
+const simulationListeners = new Set<SimulationListener>();
+
+function setSimulationActive(active: boolean) {
+  if (isSimulating !== active) {
+    isSimulating = active;
+    simulationListeners.forEach((fn) => fn(active));
+  }
+}
+
+export function isSimulationMode(): boolean {
+  return isSimulating;
+}
+
+export function subscribeSimulationMode(listener: SimulationListener): () => void {
+  simulationListeners.add(listener);
+  listener(isSimulating);
+  return () => {
+    simulationListeners.delete(listener);
+  };
+}
+
+export function useSimulationMode(): boolean {
+  const [simulating, setSimulating] = useState(isSimulationMode());
+  useEffect(() => {
+    return subscribeSimulationMode(setSimulating);
+  }, []);
+  return simulating;
+}
+
+// Fast background health check
+function scheduleLivenessCheck() {
+  setTimeout(async () => {
+    try {
+      const c = new AbortController();
+      const t = setTimeout(() => c.abort(), 800);
+      const res = await fetch(`${API_URL}/health`, { signal: c.signal });
+      clearTimeout(t);
+      if (res.ok) {
+        isBackendReachable = true;
+        setSimulationActive(false);
+      }
+    } catch {
+      isBackendReachable = false;
+    }
+  }, RETRY_INTERVAL_MS);
+}
+
 /**
- * Intelligent API dispatcher:
- * 1. Attempts the live production/development Express API server.
- * 2. If the API is unreachable (server sleeping, local port 4000 not started, or static Vercel preview),
- *    smoothly falls back to our local client-side reactive store so 100% of buttons, flows, and animations work!
+ * High-performance, zero-hang API dispatcher:
+ * 1. If backend previously failed within 25 seconds, instantly returns local store in 0ms.
+ * 2. Uses a strict 1000ms timeout so the UI never freezes or hangs.
+ * 3. Gracefully and instantly falls back to reactive local simulation store.
  */
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const now = Date.now();
+  if (!isBackendReachable && now - lastFailureTime < RETRY_INTERVAL_MS) {
+    return handleFallback<T>(path, options);
+  }
+
   const headers = new Headers(options.headers);
   if (!(options.body instanceof FormData) && !headers.has("Content-Type") && options.body) {
     headers.set("Content-Type", "application/json");
@@ -40,17 +99,30 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   const access = token();
   if (access) headers.set("Authorization", `Bearer ${access}`);
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 1200);
+
   try {
-    const response = await fetch(`${API_URL}${path}`, { ...options, headers });
+    const response = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
     if (response.ok) {
+      isBackendReachable = true;
+      setSimulationActive(false);
       const json = (await response.json().catch(() => null)) as Envelope<T> | null;
       if (json && json.success !== false && "data" in json) {
         return json.data;
       }
     }
-    // If response returned 404 (endpoint not configured on static host) or 502/503 (Render free tier waking up),
-    // we route to mock fallback handler
+
     if (response.status === 404 || response.status === 502 || response.status === 503) {
+      isBackendReachable = false;
+      lastFailureTime = Date.now();
+      scheduleLivenessCheck();
       return handleFallback<T>(path, options);
     }
 
@@ -60,15 +132,16 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     }
     return handleFallback<T>(path, options);
   } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : "";
-    if (errorMsg.includes("Failed to fetch") || errorMsg.includes("NetworkError") || errorMsg.includes("fetch")) {
-      return handleFallback<T>(path, options);
-    }
-    throw err;
+    clearTimeout(timeoutId);
+    isBackendReachable = false;
+    lastFailureTime = Date.now();
+    scheduleLivenessCheck();
+    return handleFallback<T>(path, options);
   }
 }
 
 function handleFallback<T>(path: string, options: RequestInit = {}): T {
+  setSimulationActive(true);
   const method = (options.method || "GET").toUpperCase();
   const body = options.body ? (typeof options.body === "string" ? JSON.parse(options.body) : options.body) : {};
 

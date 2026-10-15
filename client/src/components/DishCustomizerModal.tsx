@@ -38,10 +38,51 @@ export function DishCustomizerModal({
   function handleAdd() {
     if (!product) return;
     sound.play("add");
-    // Add product to cart
-    add(product, quantity);
+    // Add product to cart with custom choices
+    add(product, quantity, {
+      cut: isChicken ? cut : undefined,
+      sauce,
+      specialNotes: specialNotes.trim() || undefined,
+    });
+
+    if (extraRice) {
+      add(
+        {
+          id: "prod_garlic",
+          name: "Garlic Rice",
+          slug: "garlic-rice",
+          description: "Toasted garlic, fluffy grains, extra golden crunch on top.",
+          price: 35,
+          imageUrl: "/images/whole-lechon-manok.jpg",
+          availableQty: 80,
+          soldOut: false,
+          active: true,
+          category: { id: "cat_extras", name: "Rice & Sides", slug: "rice-sides" },
+        },
+        quantity,
+      );
+    }
+
+    if (extraSauce) {
+      add(
+        {
+          id: "prod_sauce",
+          name: "House Sawsawan Set",
+          slug: "sawsawan-set",
+          description: "Toyomansi, chili garlic oil, and savory liver sauce in takeout cups.",
+          price: 25,
+          imageUrl: "/images/whole-lechon-manok.jpg",
+          availableQty: 50,
+          soldOut: false,
+          active: true,
+          category: { id: "cat_extras", name: "Rice & Sides", slug: "rice-sides" },
+        },
+        quantity,
+      );
+    }
+
     toast.success(`Added ${quantity}× ${product.name} to order!`, {
-      description: `${formatPeso(totalPrice)} • Customized & ready in cart`,
+      description: `${isChicken ? `${cut} • ` : ""}${sauce} • Added to bag`,
     });
     onClose();
   }

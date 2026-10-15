@@ -130,7 +130,7 @@ export function StaffProductsPage() {
     setName("");
     setDescription("");
     setPrice("");
-    setImageUrl("https://images.unsplash.com/photo-1598103442097-8b70429476eb?auto=format&fit=crop&w=1200&q=80");
+    setImageUrl("/images/whole-lechon-manok.jpg");
     setAvailableQty("20");
     setCategoryId(categories?.[0]?.id || "");
     setActive(true);

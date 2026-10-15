@@ -1,14 +1,21 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { Product } from "@/types";
 
+export type CartCustomization = {
+  cut?: string;
+  sauce?: string;
+  specialNotes?: string;
+};
+
 export type CartItem = {
   product: Product;
   quantity: number;
+  customization?: CartCustomization;
 };
 
 type CartContextValue = {
   items: CartItem[];
-  add: (product: Product, quantity?: number) => void;
+  add: (product: Product, quantity?: number, customization?: CartCustomization) => void;
   setQty: (productId: string, quantity: number) => void;
   remove: (productId: string) => void;
   clear: () => void;
@@ -33,15 +40,22 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, [items]);
 
   const value = useMemo<CartContextValue>(() => {
-    const add = (product: Product, quantity = 1) => {
+    const add = (product: Product, quantity = 1, customization?: CartCustomization) => {
       setItems((current) => {
         const found = current.find((item) => item.product.id === product.id);
         if (found) {
           return current.map((item) =>
-            item.product.id === product.id ? { ...item, quantity: item.quantity + quantity, product } : item,
+            item.product.id === product.id
+              ? {
+                  ...item,
+                  quantity: item.quantity + quantity,
+                  product,
+                  customization: customization || item.customization,
+                }
+              : item,
           );
         }
-        return [...current, { product, quantity }];
+        return [...current, { product, quantity, customization }];
       });
     };
     return {

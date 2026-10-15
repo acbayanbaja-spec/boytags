@@ -53,7 +53,7 @@ export function RatingModal({
           </div>
           <h3 className="display text-xl font-bold text-ink">Salamat sa Feedback!</h3>
           <p className="text-xs text-muted">
-            Your review helps our Santa Rosa grill masters maintain the highest standards.
+            Your review helps our Tupi pitmasters maintain the highest standards of flavor and quality.
           </p>
         </div>
       ) : (

@@ -154,6 +154,11 @@ export function OrderTrackingPage() {
             <div className="flex items-center gap-2.5">
               <h1 className="display text-2xl font-bold text-ink">Order {order.orderNumber}</h1>
               <StatusBadge status={order.status} />
+              {order.isSimulated && (
+                <span className="rounded-full border border-gold/40 bg-gold/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-900">
+                  Demo Simulation
+                </span>
+              )}
             </div>
             <p className="text-xs text-muted mt-0.5">
               Placed {formatDateTime(order.createdAt)} • {isDelivery ? "Doorstep Delivery" : "Poblacion Tupi Pickup"}
@@ -234,6 +239,19 @@ export function OrderTrackingPage() {
           )}
         </div>
       </div>
+
+      {/* Simulation Advisory Banner */}
+      {order.isSimulated && (
+        <div className="rounded-2xl border border-gold/40 bg-amber-50/70 p-4 text-xs text-amber-950 flex items-start gap-3">
+          <ShieldCheck className="h-4 w-4 text-gold shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            <p className="font-bold">Offline Simulation Order (Test & Demo Mode)</p>
+            <p className="text-muted leading-relaxed">
+              This order was recorded using the client reactive simulation engine because the live PostgreSQL server is offline. Status transitions and tracking reflect local simulation. No real restaurant charges or food preparation will take place.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Unclaimed Order Banner */}
       {isUnclaimed && (

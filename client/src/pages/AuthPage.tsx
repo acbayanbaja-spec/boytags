@@ -25,7 +25,12 @@ import { sound } from "@/lib/sound";
 import { Button, Field, inputClass, Modal, PasswordStrengthMeter } from "@/components/ui";
 
 export function AuthPage() {
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const navigate = useNavigate();
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const next = searchParams.get("next") || "/";
+  const initialMode = searchParams.get("mode") === "register" ? "register" : "login";
+  const [mode, setMode] = useState<"login" | "register">(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -44,10 +49,6 @@ export function AuthPage() {
   const [forgotResetUrl, setForgotResetUrl] = useState<string | null>(null);
 
   const { login, register } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const searchParams = new URLSearchParams(location.search);
-  const next = searchParams.get("next") || "/";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -179,23 +180,18 @@ export function AuthPage() {
           <div className="relative z-10 my-auto space-y-4 py-8">
             <div className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-300 backdrop-blur-sm">
               <Sparkles className="h-3.5 w-3.5" />
-              <span>Santa Rosa's Premier Roast Chicken</span>
+              <span>Poblacion, Tupi's Pride</span>
             </div>
             <h2 className="display text-3xl font-bold leading-snug text-white lg:text-4xl">
               Golden crackling skin, juicy meat, garlic-infused aroma.
             </h2>
             <p className="text-xs text-amber-100/75 leading-relaxed">
-              Real-time kitchen queue tracking, live roaster monitoring, and pinpoint doorstep delivery across Laguna.
+              Real-time kitchen queue tracking, live roaster monitoring, and pinpoint doorstep delivery across Tupi & nearby South Cotabato areas.
             </p>
 
             <div className="flex items-center gap-2 pt-2 text-xs text-amber-300">
-              <div className="flex text-amber-400">
-                {[1, 2, 3, 4, 5].map((s) => (
-                  <Star key={s} className="h-3.5 w-3.5 fill-amber-400" />
-                ))}
-              </div>
-              <span className="font-bold">4.9/5</span>
-              <span className="text-amber-100/60">• 3,400+ Santa Rosa Orders</span>
+              <span className="font-bold">100% Hardwood Charcoal Roasted</span>
+              <span className="text-amber-100/60">• Poblacion, Tupi</span>
             </div>
           </div>
 
@@ -252,7 +248,7 @@ export function AuthPage() {
               <p className="text-xs text-muted mt-0.5">
                 {mode === "login"
                   ? "Track active orders, save favorite delivery pins, and earn rewards."
-                  : "Join today for lightning-fast roast chicken ordering in Santa Rosa."}
+                  : "Join today for lightning-fast roast chicken ordering in Poblacion, Tupi."}
               </p>
             </div>
 
@@ -461,7 +457,7 @@ export function AuthPage() {
           {/* House Guarantee note */}
           <div className="mt-8 pt-4 border-t border-line text-center text-xs text-muted flex items-center justify-center gap-1.5">
             <ShieldCheck className="h-4 w-4 text-leaf" />
-            <span>Secure 256-bit encryption • Boytag's Santa Rosa Quality Guarantee</span>
+            <span>Secure 256-bit encryption • Boytag's Poblacion, Tupi Quality Guarantee</span>
           </div>
         </div>
       </motion.div>

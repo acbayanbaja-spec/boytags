@@ -36,7 +36,9 @@ export type Product = {
   availableQty: number;
   soldOut: boolean;
   active: boolean;
-  category: { id: string; name: string; slug: string };
+  category: { id: string; name: string; slug: string; sortOrder?: number };
+  bestseller?: boolean;
+  featured?: boolean;
 };
 
 export type OrderItem = {
@@ -75,6 +77,7 @@ export type Order = {
   delivery: Delivery | null;
   customer?: { id: string; name: string; email: string; phone?: string | null };
   history?: HistoryEntry[];
+  isSimulated?: boolean;
 };
 
 export type HistoryEntry = {
