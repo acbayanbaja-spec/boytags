@@ -192,7 +192,9 @@ function handleFallback<T>(path: string, options: RequestInit = {}): T {
 
   // Orders
   if (path === "/api/orders" && method === "GET") {
-    return mockBackend.getOrders(mockBackend.getCurrentUser()) as unknown as T;
+    const currentUser = mockBackend.getCurrentUser();
+    if (!currentUser) return [] as unknown as T;
+    return mockBackend.getOrders(currentUser) as unknown as T;
   }
   if (path === "/api/orders/queue" && method === "GET") {
     return mockBackend.getOrders() as unknown as T;

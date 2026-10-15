@@ -19,7 +19,7 @@ import {
   Phone,
 } from "lucide-react";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import { useRealtime } from "@/hooks/useRealtime";
@@ -50,34 +50,42 @@ export function StoreShell() {
   const { user, logout } = useAuth();
   const { count } = useCart();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const isSimulating = useSimulationMode();
   useRealtime();
-
-  // Check unread notifications
-  const { data: notes } = useQuery({
-    queryKey: ["notifications"],
-    queryFn: () => api<{ unread: number }>("/api/notifications"),
-    enabled: Boolean(user),
-    refetchInterval: 10000,
-  });
-
-  // Check if current user has an active in-progress order to show live tracking pill in header
-  const { data: activeOrders } = useQuery<Order[]>({
-    queryKey: ["orders", "active-preview"],
-    queryFn: () => api<Order[]>("/api/orders"),
-    enabled: Boolean(user),
-    refetchInterval: 6000,
-  });
-
-  const liveOrder = activeOrders?.find((o) =>
-    ["PENDING", "CONFIRMED", "PREPARING", "READY", "OUT_FOR_DELIVERY"].includes(o.status),
-  );
 
   const isCustomer = user?.role === "CUSTOMER";
   const isStaff = user && (user.role === "STAFF" || user.role === "ADMIN");
 
+  // Check unread notifications: only enabled when user is logged in
+  const { data: notes } = useQuery({
+    queryKey: ["notifications", user?.id],
+    queryFn: () => (user ? api<{ unread: number }>("/api/notifications") : Promise.resolve({ unread: 0 })),
+    enabled: Boolean(user),
+    refetchInterval: user ? 10000 : false,
+  });
+
+  // Check if current user has an active in-progress order to show live tracking pill in header
+  // ONLY runs when an authenticated customer is logged in; returns empty array when logged out
+  const { data: activeOrders } = useQuery<Order[]>({
+    queryKey: ["orders", "active-preview", user?.id],
+    queryFn: () => (user && isCustomer ? api<Order[]>("/api/orders") : Promise.resolve([])),
+    enabled: Boolean(user && isCustomer),
+    refetchInterval: user && isCustomer ? 6000 : false,
+  });
+
+  // Strict check: ONLY show if user IS LOGGED IN, is a CUSTOMER, and has an active cooking/delivering order
+  const liveOrder = Boolean(user && isCustomer && activeOrders && activeOrders.length > 0)
+    ? activeOrders?.find((o) =>
+        ["PENDING", "CONFIRMED", "PREPARING", "READY", "OUT_FOR_DELIVERY"].includes(o.status),
+      )
+    : null;
+
   function handleLogout() {
     logout();
+    // Clear all cached queries so no user orders or notifications leak to logged-out visitors
+    queryClient.removeQueries({ queryKey: ["orders"] });
+    queryClient.removeQueries({ queryKey: ["notifications"] });
     navigate("/", { replace: true });
   }
 
@@ -206,8 +214,8 @@ export function StoreShell() {
             </div>
           </div>
 
-          {/* Active Live Order Pill Banner (shows if user has an order cooking / delivering) */}
-          {liveOrder && (
+          {/* Active Live Order Pill Banner (shows ONLY when an authenticated customer has an order cooking / delivering) */}
+          {Boolean(user && isCustomer) && liveOrder && (
             <div className="bg-gradient-to-r from-orange-700 via-roast to-amber-700 text-white text-xs py-1.5 px-4 shadow-inner">
               <div className="mx-auto max-w-6xl flex items-center justify-between">
                 <div className="flex items-center gap-2">

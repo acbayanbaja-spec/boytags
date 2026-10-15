@@ -608,7 +608,10 @@ class MockBackend {
   }
 
   public getOrders(user?: User | null): Order[] {
-    if (!user || user.role === "STAFF" || user.role === "ADMIN") {
+    if (!user) {
+      return [];
+    }
+    if (user.role === "STAFF" || user.role === "ADMIN") {
       return this.orders;
     }
     return this.orders.filter((o) => o.customer?.id === user.id);
