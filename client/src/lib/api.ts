@@ -197,7 +197,7 @@ function handleFallback<T>(path: string, options: RequestInit = {}): T {
     return mockBackend.getOrders(currentUser) as unknown as T;
   }
   if (path === "/api/orders/queue" && method === "GET") {
-    return mockBackend.getOrders() as unknown as T;
+    return mockBackend.getQueueOrders() as unknown as T;
   }
   if (path === "/api/orders" && method === "POST") {
     return mockBackend.createOrder(body) as unknown as T;

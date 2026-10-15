@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
-import { api, useSimulationMode } from "@/lib/api";
+import { api } from "@/lib/api";
 import { formatPeso } from "@/lib/utils";
 import { sound } from "@/lib/sound";
 import { LocationPicker, TUPI_BOYTAGS_COORDS } from "@/components/MapPin";
@@ -28,7 +28,6 @@ export function CheckoutPage() {
   const { user } = useAuth();
   const { items, subtotal, clear } = useCart();
   const navigate = useNavigate();
-  const isSimulating = useSimulationMode();
 
   const [orderType, setOrderType] = useState<OrderType>("DELIVERY");
   const [scheduleMode, setScheduleMode] = useState<"asap" | "custom">("asap");
@@ -157,11 +156,7 @@ export function CheckoutPage() {
 
       sound.play("success");
       clear();
-      if (order.isSimulated || isSimulating) {
-        toast.info(`Demo Order placed! Ref: ${order.orderNumber} (Simulation Mode)`);
-      } else {
-        toast.success(`Order placed! Reference: ${order.orderNumber}`);
-      }
+      toast.success(`Order placed! Reference: ${order.orderNumber}`);
       navigate(`/orders/${order.id}`);
     } catch (err) {
       sound.play("alert");
@@ -335,6 +330,36 @@ export function CheckoutPage() {
                   className={inputClass()}
                 />
               </Field>
+
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted block mb-1.5">
+                  Popular Tupi Landmarks (1-Tap Fill):
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { name: "Tupi Municipal Hall & Plaza", lat: 6.3338, lng: 124.9518 },
+                    { name: "Tupi Public Market", lat: 6.3352, lng: 124.9531 },
+                    { name: "Tupi National High School", lat: 6.3312, lng: 124.9495 },
+                    { name: "Poblacion Barangay Gym", lat: 6.3345, lng: 124.9525 },
+                    { name: "National Highway Crossing", lat: 6.3361, lng: 124.9542 },
+                  ].map((lm) => (
+                    <button
+                      key={lm.name}
+                      type="button"
+                      onClick={() => {
+                        sound.play("click");
+                        setLandmark(lm.name);
+                        setLat(lm.lat);
+                        setLng(lm.lng);
+                        if (!address) setAddress(`Near ${lm.name}, Poblacion, Tupi`);
+                      }}
+                      className="rounded-full border border-line bg-cream px-2.5 py-1 text-[11px] font-medium text-ink hover:border-roast hover:text-roast transition"
+                    >
+                      + {lm.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               <Field label="Barangay Landmark (Crucial for Rider)">
                 <input
@@ -546,18 +571,6 @@ export function CheckoutPage() {
                 Payment mode: {paymentMethod === "COD" ? (orderType === "DELIVERY" ? "Cash on Delivery" : "Cash at Counter") : paymentMethod}
               </p>
             </div>
-
-            {isSimulating && (
-              <div className="rounded-xl border border-gold/40 bg-gold/10 p-3 text-xs text-amber-950 flex items-start gap-2.5">
-                <AlertCircle className="h-4 w-4 text-gold shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-bold">Offline Simulation Mode Active</p>
-                  <p className="text-muted text-[11px] leading-relaxed">
-                    Database server is disconnected. This order will run in browser simulation mode for demonstration and testing. No real financial transaction will occur.
-                  </p>
-                </div>
-              </div>
-            )}
 
             <Button
               type="submit"

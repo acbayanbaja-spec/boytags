@@ -107,11 +107,11 @@ export function StaffQueuePage() {
     return null;
   }
 
-  const kanbanColumns: Array<{ title: string; status: OrderStatus; color: string }> = [
-    { title: "Incoming / New", status: "PENDING", color: "border-amber-400 bg-amber-50/30" },
-    { title: "Roasting Pit", status: "PREPARING", color: "border-orange-400 bg-orange-50/30" },
-    { title: "Warmer / Packing", status: "READY", color: "border-emerald-400 bg-emerald-50/30" },
-    { title: "With Rider", status: "OUT_FOR_DELIVERY", color: "border-indigo-400 bg-indigo-50/30" },
+  const kanbanColumns: Array<{ title: string; statuses: OrderStatus[]; color: string }> = [
+    { title: "Incoming & Confirmed", statuses: ["PENDING", "CONFIRMED"], color: "border-amber-400 bg-amber-50/30" },
+    { title: "Roasting Pit", statuses: ["PREPARING"], color: "border-orange-400 bg-orange-50/30" },
+    { title: "Warmer / Packing", statuses: ["READY"], color: "border-emerald-400 bg-emerald-50/30" },
+    { title: "With Rider", statuses: ["OUT_FOR_DELIVERY"], color: "border-indigo-400 bg-indigo-50/30" },
   ];
 
   return (
@@ -258,9 +258,9 @@ export function StaffQueuePage() {
         /* KDS Kanban Rail View */
         <div className="grid gap-4 md:grid-cols-4 items-start">
           {kanbanColumns.map((col) => {
-            const colOrders = filteredQueue.filter((o) => o.status === col.status);
+            const colOrders = filteredQueue.filter((o) => col.statuses.includes(o.status));
             return (
-              <div key={col.status} className={`rounded-3xl border ${col.color} p-4 space-y-3 min-h-[500px]`}>
+              <div key={col.title} className={`rounded-3xl border ${col.color} p-4 space-y-3 min-h-[500px]`}>
                 <div className="flex items-center justify-between border-b border-line pb-2">
                   <span className="font-bold text-xs uppercase tracking-wider text-ink">{col.title}</span>
                   <span className="grid h-5 w-5 place-items-center rounded-full bg-roast text-[10px] font-bold text-white">

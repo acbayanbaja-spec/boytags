@@ -25,11 +25,6 @@ export function ReceiptModal({
         <div className="print-area rounded-2xl border border-line bg-paper p-6 text-ink shadow-sm space-y-4 font-mono text-xs">
           {/* Header */}
           <div className="text-center space-y-1 border-b border-dashed border-line pb-4">
-            {order.isSimulated && (
-              <div className="mb-2 rounded-lg border border-gold/40 bg-amber-50/80 p-1.5 text-center text-[10px] font-sans font-bold text-amber-900 uppercase tracking-wider">
-                ⚠️ Local Simulation Mode • Test Transaction Only
-              </div>
-            )}
             <div className="inline-flex items-center gap-1.5 font-sans font-bold text-base text-roast">
               <Flame className="h-5 w-5" />
               <span>BOYTAG'S LECHON MANOK</span>

@@ -156,7 +156,7 @@ export function AuthPage() {
         transition={{ duration: 0.35, ease: "easeOut" }}
         className="w-full max-w-5xl overflow-hidden rounded-3xl border border-line bg-paper shadow-2xl md:grid md:grid-cols-12"
       >
-        {/* Left Side: Brand Immersion & Instant Demo Roles */}
+        {/* Left Side: Brand Immersion & Instant Role Profiles */}
         <div className="relative hidden flex-col justify-between bg-gradient-to-br from-[#28150c] via-[#1a0c06] to-[#100602] p-10 text-white md:col-span-5 md:flex overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(194,65,12,0.35),transparent_65%)] pointer-events-none" />
           <div className="absolute -bottom-10 -right-10 h-64 w-64 rounded-full bg-amber-500/10 blur-3xl pointer-events-none" />
@@ -199,9 +199,9 @@ export function AuthPage() {
           <div className="relative z-10 rounded-2xl border border-white/15 bg-white/5 p-4 backdrop-blur-md space-y-2.5">
             <div className="flex items-center justify-between">
               <p className="text-[11px] font-bold uppercase tracking-wider text-amber-300">
-                ⚡ 1-Click Instant Demo Login
+                ⚡ 1-Click Fast Role Sign-in
               </p>
-              <span className="text-[10px] text-amber-200/60">Zero typing needed</span>
+              <span className="text-[10px] text-amber-200/60">Instant switch</span>
             </div>
 
             <div className="grid grid-cols-3 gap-2">

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -21,7 +21,14 @@ import {
   Star,
   Share2,
   Copy,
+  Thermometer,
+  Activity,
+  RotateCw,
+  Sparkles,
+  PhoneCall,
+  ShoppingBag,
 } from "lucide-react";
+import { useCart } from "@/context/CartContext";
 import { api } from "@/lib/api";
 import { formatDateTime, formatPeso, formatTime } from "@/lib/utils";
 import { sound } from "@/lib/sound";
@@ -38,6 +45,8 @@ import { toast } from "sonner";
 export function OrderTrackingPage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const { add } = useCart();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   useRealtime();
 
@@ -100,6 +109,30 @@ export function OrderTrackingPage() {
     }
   }
 
+  function handleReorderNow() {
+    if (!order) return;
+    sound.play("add");
+    order.items.forEach((item) => {
+      add(
+        {
+          id: item.productId,
+          name: item.productName,
+          slug: item.productName.toLowerCase().replace(/\s+/g, "-"),
+          description: "Boytag's signature roast order",
+          price: item.unitPrice,
+          imageUrl: "/images/whole-lechon-manok.jpg",
+          availableQty: 20,
+          soldOut: false,
+          active: true,
+          category: { id: "cat_lechon", name: "Lechon Manok", slug: "lechon-manok" },
+        },
+        item.quantity,
+      );
+    });
+    toast.success("Items from this order added to your feast cart!");
+    navigate("/cart");
+  }
+
   if (isLoading) {
     return (
       <div className="space-y-6 py-6">
@@ -154,11 +187,6 @@ export function OrderTrackingPage() {
             <div className="flex items-center gap-2.5">
               <h1 className="display text-2xl font-bold text-ink">Order {order.orderNumber}</h1>
               <StatusBadge status={order.status} />
-              {order.isSimulated && (
-                <span className="rounded-full border border-gold/40 bg-gold/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-900">
-                  Demo Simulation
-                </span>
-              )}
             </div>
             <p className="text-xs text-muted mt-0.5">
               Placed {formatDateTime(order.createdAt)} • {isDelivery ? "Doorstep Delivery" : "Poblacion Tupi Pickup"}
@@ -239,19 +267,6 @@ export function OrderTrackingPage() {
           )}
         </div>
       </div>
-
-      {/* Simulation Advisory Banner */}
-      {order.isSimulated && (
-        <div className="rounded-2xl border border-gold/40 bg-amber-50/70 p-4 text-xs text-amber-950 flex items-start gap-3">
-          <ShieldCheck className="h-4 w-4 text-gold shrink-0 mt-0.5" />
-          <div className="space-y-0.5">
-            <p className="font-bold">Offline Simulation Order (Test & Demo Mode)</p>
-            <p className="text-muted leading-relaxed">
-              This order was recorded using the client reactive simulation engine because the live PostgreSQL server is offline. Status transitions and tracking reflect local simulation. No real restaurant charges or food preparation will take place.
-            </p>
-          </div>
-        </div>
-      )}
 
       {/* Unclaimed Order Banner */}
       {isUnclaimed && (
@@ -335,6 +350,100 @@ export function OrderTrackingPage() {
                 </div>
               );
             })}
+          </div>
+        </Card>
+      )}
+
+      {/* Live Charcoal Roaster & Kitchen Telemetry HUD */}
+      {!isCancelled && (
+        <Card className="overflow-hidden border-2 border-roast/20 bg-gradient-to-br from-paper via-cream/40 to-paper p-6 shadow-sm">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-line pb-4">
+            <div className="flex items-center gap-3">
+              <div className="relative grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-orange-500 via-roast to-amber-700 text-white shadow-md shadow-roast/25">
+                <Flame className={`h-6 w-6 ${order.status === "PREPARING" ? "animate-bounce" : "animate-pulse"}`} />
+                {order.status === "PREPARING" && (
+                  <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                  </span>
+                )}
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="display text-lg font-bold text-ink">
+                    {order.status === "PENDING" && "Tupi Expediter Station: Order Queued"}
+                    {order.status === "CONFIRMED" && "Skewered on Bamboo Spit: Preheating Pit"}
+                    {order.status === "PREPARING" && "Live Charcoal Spit Roaster: In Roasting"}
+                    {order.status === "READY" && "Stainless Thermal Chamber: Rested & Carved (65°C)"}
+                    {order.status === "OUT_FOR_DELIVERY" && "Active Roadway Dispatch: With Tupi Rider"}
+                    {order.status === "COMPLETED" && "Feast Complete: Enjoy Your Hot Lechon!"}
+                    {order.status === "UNCLAIMED" && "Holding in Warming Chamber: Awaiting Claim"}
+                  </h3>
+                </div>
+                <p className="text-xs text-muted mt-0.5">
+                  South Cotabato - Sarangani Road HQ Pit • Native Lemongrass, Garlic & Calamansi Aromatics
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <a
+                href="tel:0832281234"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-line bg-paper px-3 py-1.5 text-xs font-bold text-ink hover:border-roast/40 transition shadow-sm"
+              >
+                <PhoneCall className="h-3.5 w-3.5 text-roast" />
+                <span>Call Hotline (083) 228-1234</span>
+              </a>
+              {isCompleted && (
+                <Button size="sm" onClick={handleReorderNow} className="text-xs font-bold gap-1 shadow-md shadow-roast/20">
+                  <RotateCw className="h-3.5 w-3.5" />
+                  Order Feast Again
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Telemetry Metrics Bar */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4">
+            <div className="rounded-2xl bg-paper border border-line p-3">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted flex items-center gap-1">
+                <Thermometer className="h-3 w-3 text-roast" /> Roaster Chamber
+              </span>
+              <span className="display text-base sm:text-lg font-bold text-ink mt-0.5 block">
+                {order.status === "PREPARING" ? "195°C Charcoal" : order.status === "READY" ? "65°C Warmer" : "Ambient Ready"}
+              </span>
+              <span className="text-[10px] text-muted">Charcoal Ember Pit</span>
+            </div>
+
+            <div className="rounded-2xl bg-paper border border-line p-3">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted flex items-center gap-1">
+                <Activity className="h-3 w-3 text-leaf" /> Roaster Spin
+              </span>
+              <span className="display text-base sm:text-lg font-bold text-ink mt-0.5 block">
+                {order.status === "PREPARING" ? "12 RPM Active" : order.status === "READY" ? "Resting" : "Queueing"}
+              </span>
+              <span className="text-[10px] text-muted">Bamboo Rotisserie</span>
+            </div>
+
+            <div className="rounded-2xl bg-paper border border-line p-3">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted flex items-center gap-1">
+                <Sparkles className="h-3 w-3 text-amber-500" /> Basting Recipe
+              </span>
+              <span className="display text-base sm:text-lg font-bold text-ink mt-0.5 block">
+                Native Annatto
+              </span>
+              <span className="text-[10px] text-muted">Tanglad & Calamansi</span>
+            </div>
+
+            <div className="rounded-2xl bg-paper border border-line p-3">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted flex items-center gap-1">
+                <Clock className="h-3 w-3 text-sky-500" /> Target Fulfillment
+              </span>
+              <span className="display text-base sm:text-lg font-bold text-ink mt-0.5 block">
+                {formatTime(order.scheduledAt)}
+              </span>
+              <span className="text-[10px] text-muted">{isDelivery ? "Doorstep Delivery" : "Counter Pickup"}</span>
+            </div>
           </div>
         </Card>
       )}

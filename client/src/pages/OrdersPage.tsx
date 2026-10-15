@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ClipboardList, ArrowRight, Truck, Store, Clock, RotateCcw, Printer } from "lucide-react";
 import { api } from "@/lib/api";
@@ -16,6 +16,7 @@ export function OrdersPage() {
   const [filter, setFilter] = useState<"all" | "active" | "completed" | "cancelled">("all");
   const [receiptOrder, setReceiptOrder] = useState<Order | null>(null);
   const { add } = useCart();
+  const navigate = useNavigate();
   useRealtime();
 
   const { data: orders, isLoading } = useQuery<Order[]>({
@@ -57,6 +58,7 @@ export function OrdersPage() {
       );
     });
     toast.success(`Items from order ${order.orderNumber} re-added to your cart!`);
+    navigate("/cart");
   }
 
   return (

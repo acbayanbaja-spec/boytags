@@ -213,7 +213,6 @@ export const INITIAL_ORDERS: Order[] = [
     customerNotes: "Please call when outside. Extra spicy sawsawan if possible!",
     createdAt: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
     updatedAt: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
-    isSimulated: true,
     customer: INITIAL_USERS[2],
     items: [
       {
@@ -440,10 +439,11 @@ class MockBackend {
 
   private load() {
     try {
-      const STORE_VERSION = "boytags.mock.v4";
+      const STORE_VERSION = "boytags.mock.v5";
       if (typeof window !== "undefined" && localStorage.getItem("boytags.mock.ver") !== STORE_VERSION) {
         localStorage.removeItem("boytags.mock.products");
         localStorage.removeItem("boytags.mock.categories");
+        localStorage.removeItem("boytags.mock.orders");
         localStorage.setItem("boytags.mock.ver", STORE_VERSION);
       }
 
@@ -617,6 +617,11 @@ class MockBackend {
     return this.orders.filter((o) => o.customer?.id === user.id);
   }
 
+  public getQueueOrders(): Order[] {
+    const ACTIVE_QUEUE = ["PENDING", "CONFIRMED", "PREPARING", "READY", "OUT_FOR_DELIVERY", "UNCLAIMED"];
+    return this.orders.filter((o) => ACTIVE_QUEUE.includes(o.status));
+  }
+
   public getOrder(id: string): Order {
     const order = this.orders.find((o) => o.id === id || o.orderNumber === id);
     if (!order) throw new Error("Order not found");
@@ -672,7 +677,6 @@ class MockBackend {
       customerNotes: payload.customerNotes,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      isSimulated: true,
       items: orderItems,
       delivery: payload.delivery || null,
       history: [
