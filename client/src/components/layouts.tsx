@@ -23,7 +23,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import { useRealtime } from "@/hooks/useRealtime";
-import { api, useSimulationMode } from "@/lib/api";
+import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { Button, SoundToggle } from "@/components/ui";
 import type { Order } from "@/types";
@@ -51,7 +51,6 @@ export function StoreShell() {
   const { count } = useCart();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const isSimulating = useSimulationMode();
   useRealtime();
 
   const isCustomer = user?.role === "CUSTOMER";
@@ -136,15 +135,6 @@ export function StoreShell() {
 
             {/* Action Buttons */}
             <div className="flex items-center gap-2">
-              {isSimulating && (
-                <span
-                  title="Running in local reactive simulation mode (database server offline)"
-                  className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-gold/40 bg-gold/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-900"
-                >
-                  <span className="h-1.5 w-1.5 rounded-full bg-gold animate-pulse" />
-                  <span>Demo Mode</span>
-                </span>
-              )}
               <SoundToggle />
 
               {/* Notifications: only for logged in users */}
