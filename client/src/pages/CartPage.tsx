@@ -12,7 +12,9 @@ import {
   CheckCircle2,
   Sparkles,
   Utensils,
+  Lock,
 } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import { formatPeso } from "@/lib/utils";
 import { sound } from "@/lib/sound";
@@ -20,6 +22,7 @@ import { Button, Card, EmptyState, inputClass } from "@/components/ui";
 import { toast } from "sonner";
 
 export function CartPage() {
+  const { user } = useAuth();
   const { items, setQty, remove, clear, subtotal, count } = useCart();
   const [promoCode, setPromoCode] = useState("");
   const [discountPercent, setDiscountPercent] = useState(0);
@@ -298,13 +301,48 @@ export function CartPage() {
               </p>
             </div>
 
+            {/* Guest Sign-in Requirement Notice */}
+            {!user && (
+              <div className="rounded-2xl border border-amber-300 bg-amber-50/90 p-4 space-y-2 text-xs text-amber-950">
+                <div className="flex items-center gap-2 font-bold text-amber-900">
+                  <Lock className="h-4 w-4 text-roast shrink-0" />
+                  <span>Sign In Required Before Ordering</span>
+                </div>
+                <p className="text-[11px] text-amber-900/80 leading-relaxed">
+                  You must be logged in to choose your delivery address in Tupi, schedule fulfillment, and receive live status notifications.
+                </p>
+                <div className="flex items-center gap-2 pt-1">
+                  <Link to="/login?next=/checkout" className="flex-1">
+                    <Button size="sm" className="w-full text-xs font-bold py-2 bg-roast hover:bg-roast-deep">
+                      Sign In Now
+                    </Button>
+                  </Link>
+                  <Link to="/login?mode=register&next=/checkout" className="flex-1">
+                    <Button size="sm" variant="outline" className="w-full text-xs font-bold py-2">
+                      Register
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2 pt-2">
-              <Link to="/checkout">
-                <Button className="w-full py-4 text-base font-bold shadow-lg shadow-roast/25">
-                  Proceed to Checkout
-                  <ArrowRight className="h-4 w-4 ml-1" />
-                </Button>
-              </Link>
+              {user ? (
+                <Link to="/checkout">
+                  <Button className="w-full py-4 text-base font-bold shadow-lg shadow-roast/25">
+                    Proceed to Checkout
+                    <ArrowRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </Link>
+              ) : (
+                <Link to="/login?next=/checkout">
+                  <Button className="w-full py-4 text-base font-bold shadow-lg shadow-roast/25 bg-roast hover:bg-roast-deep">
+                    <Lock className="h-4 w-4 mr-2" />
+                    Sign In to Place Order
+                    <ArrowRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </Link>
+              )}
               <Link
                 to="/menu"
                 className="block text-center text-xs font-semibold text-roast hover:underline pt-1"

@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Bell, Check, CheckCheck, ArrowRight, Clock, AlertTriangle, Sparkles } from "lucide-react";
+import { Bell, Check, CheckCheck, ArrowRight, Clock, AlertTriangle, Sparkles, CheckCircle2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { formatDateTime } from "@/lib/utils";
 import { sound } from "@/lib/sound";
@@ -84,12 +84,15 @@ export function NotificationsPage() {
           {notifications.map((n) => {
             const isUnclaimed = n.type === "UNCLAIMED";
             const isCancelled = n.type === "CANCELLED";
+            const isCompleted = n.type === "ORDER_COMPLETED";
 
             return (
               <Card
                 key={n.id}
                 className={`flex items-start justify-between gap-4 p-4 transition ${
-                  !n.read
+                  isCompleted && !n.read
+                    ? "border-emerald-400 bg-emerald-50/70 shadow-sm"
+                    : !n.read
                     ? "border-roast/40 bg-cream/70 shadow-sm"
                     : "border-line bg-paper opacity-80 hover:opacity-100"
                 }`}
@@ -97,7 +100,9 @@ export function NotificationsPage() {
                 <div className="flex items-start gap-3">
                   <div
                     className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl text-xs font-bold ${
-                      isUnclaimed
+                      isCompleted
+                        ? "bg-leaf text-white shadow-sm"
+                        : isUnclaimed
                         ? "bg-red-100 text-danger"
                         : isCancelled
                         ? "bg-rose-100 text-rose-800"
@@ -106,7 +111,9 @@ export function NotificationsPage() {
                         : "bg-cream text-muted border border-line"
                     }`}
                   >
-                    {isUnclaimed ? (
+                    {isCompleted ? (
+                      <CheckCircle2 className="h-5 w-5" />
+                    ) : isUnclaimed ? (
                       <AlertTriangle className="h-5 w-5" />
                     ) : (
                       <Bell className="h-5 w-5" />
@@ -116,6 +123,11 @@ export function NotificationsPage() {
                   <div className="space-y-0.5">
                     <div className="flex items-center gap-2">
                       <h4 className="font-bold text-sm text-ink">{n.title}</h4>
+                      {isCompleted && (
+                        <span className="rounded-full bg-leaf px-2 py-0.5 text-[10px] font-bold text-white">
+                          Done
+                        </span>
+                      )}
                       {!n.read && (
                         <span className="h-2 w-2 rounded-full bg-roast shrink-0" />
                       )}
@@ -136,7 +148,7 @@ export function NotificationsPage() {
                         if (!n.read) markOneMutation.mutate(n.id);
                       }}
                     >
-                      <Button variant="outline" size="sm" className="h-8 px-2.5 text-xs font-semibold">
+                      <Button variant={isCompleted ? "primary" : "outline"} size="sm" className="h-8 px-2.5 text-xs font-semibold">
                         View Order <ArrowRight className="h-3 w-3 ml-1" />
                       </Button>
                     </Link>

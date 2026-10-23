@@ -30,11 +30,36 @@ export function waitingLabel(from: string | Date) {
   return `${h}h ${mins % 60}m waiting`;
 }
 
-export function scheduleLabel(value: string | Date) {
+export function formatDeliveryDateLabel(value: string | Date) {
+  const target = new Date(value);
+  const now = new Date();
+  const isToday =
+    target.getFullYear() === now.getFullYear() &&
+    target.getMonth() === now.getMonth() &&
+    target.getDate() === now.getDate();
+  if (isToday) return "Today";
+
+  const tomorrow = new Date(now);
+  tomorrow.setDate(now.getDate() + 1);
+  const isTomorrow =
+    target.getFullYear() === tomorrow.getFullYear() &&
+    target.getMonth() === tomorrow.getMonth() &&
+    target.getDate() === tomorrow.getDate();
+  if (isTomorrow) return "Tomorrow";
+
+  return target.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
+}
+
+export function scheduleLabel(value: string | Date, status?: string) {
   const date = new Date(value);
+  if (status === "COMPLETED") {
+    return `${formatTime(date)} (${formatDeliveryDateLabel(date)})`;
+  }
   const diff = date.getTime() - Date.now();
-  if (diff < 0) return `Overdue · ${formatTime(date)}`;
-  return formatDateTime(date);
+  if (diff < -15 * 60 * 1000 && !["COMPLETED", "CANCELLED"].includes(status || "")) {
+    return `Delayed · ${formatTime(date)} (${formatDeliveryDateLabel(date)})`;
+  }
+  return `${formatTime(date)} (${formatDeliveryDateLabel(date)})`;
 }
 
 export const reducedMotion =

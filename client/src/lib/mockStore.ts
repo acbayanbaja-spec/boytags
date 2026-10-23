@@ -466,7 +466,7 @@ class MockBackend {
       this.alerts = a ? JSON.parse(a) : INITIAL_ALERTS;
 
       const cur = localStorage.getItem("boytags.mock.current_user");
-      this.currentUser = cur ? JSON.parse(cur) : this.users[0];
+      this.currentUser = cur ? JSON.parse(cur) : null;
     } catch {
       this.users = INITIAL_USERS;
       this.categories = INITIAL_CATEGORIES;
@@ -474,7 +474,7 @@ class MockBackend {
       this.orders = INITIAL_ORDERS;
       this.notifications = INITIAL_NOTIFICATIONS;
       this.alerts = INITIAL_ALERTS;
-      this.currentUser = INITIAL_USERS[0];
+      this.currentUser = null;
     }
   }
 
@@ -642,7 +642,10 @@ class MockBackend {
       longitude: number;
     };
   }): Order {
-    const user = this.currentUser || INITIAL_USERS[2];
+    if (!this.currentUser) {
+      throw new Error("You must be logged in to place an order. Please sign in or create an account.");
+    }
+    const user = this.currentUser;
     const orderNum = `BT-${1000 + this.orders.length + 1}`;
 
     let subtotal = 0;
@@ -726,17 +729,37 @@ class MockBackend {
       createdAt: new Date().toISOString(),
     });
 
-    this.notifications.unshift({
-      id: `notif_${Date.now()}`,
-      orderId: order.id,
-      type: "STATUS_UPDATE",
-      title: `Order ${order.orderNumber}: ${newStatus.replace(/_/g, " ")}`,
-      body: `Your order status changed from ${prevStatus} to ${newStatus}.`,
-      read: false,
-      createdAt: new Date().toISOString(),
-    });
+    if (newStatus === "COMPLETED") {
+      this.notifications.unshift({
+        id: `notif_${Date.now()}_done`,
+        orderId: order.id,
+        type: "ORDER_COMPLETED",
+        title: `Order ${order.orderNumber} is Done! 🎉`,
+        body: order.type === "DELIVERY"
+          ? `Your order ${order.orderNumber} has been safely delivered to your doorstep in Tupi! Salamat sa pag-order sa Boytag's Lechon Manok!`
+          : `Your order ${order.orderNumber} has been picked up and completed at our Poblacion HQ! Enjoy your charcoal-roasted feast!`,
+        read: false,
+        createdAt: new Date().toISOString(),
+      });
+    } else {
+      this.notifications.unshift({
+        id: `notif_${Date.now()}`,
+        orderId: order.id,
+        type: "STATUS_UPDATE",
+        title: `Order ${order.orderNumber}: ${newStatus.replace(/_/g, " ")}`,
+        body: `Your order status changed from ${prevStatus} to ${newStatus}.`,
+        read: false,
+        createdAt: new Date().toISOString(),
+      });
+    }
 
     this.save();
+    emitMockStore({
+      type: newStatus === "COMPLETED" ? "order-completed" : "order-updated",
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      status: newStatus,
+    });
     return order;
   }
 
@@ -746,6 +769,12 @@ class MockBackend {
     if (updates.scheduledAt) order.scheduledAt = updates.scheduledAt;
     order.updatedAt = new Date().toISOString();
     this.save();
+    emitMockStore({
+      type: "order-updated",
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      status: order.status,
+    });
     return order;
   }
 
@@ -767,6 +796,12 @@ class MockBackend {
       createdAt: new Date().toISOString(),
     });
     this.save();
+    emitMockStore({
+      type: "order-cancelled",
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      status: "CANCELLED",
+    });
     return order;
   }
 
@@ -840,8 +875,16 @@ class MockBackend {
   }
 
   public getNotifications(): { items: NotificationItem[]; unread: number } {
-    const unread = this.notifications.filter((n) => !n.read).length;
-    return { items: this.notifications, unread };
+    if (!this.currentUser) {
+      return { items: [], unread: 0 };
+    }
+    let userNotifs = this.notifications;
+    if (this.currentUser.role === "CUSTOMER") {
+      const userOrderIds = new Set(this.orders.filter((o) => o.customer?.id === this.currentUser!.id).map((o) => o.id));
+      userNotifs = this.notifications.filter((n) => !n.orderId || userOrderIds.has(n.orderId));
+    }
+    const unread = userNotifs.filter((n) => !n.read).length;
+    return { items: userNotifs, unread };
   }
 
   public markNotificationRead(id: string) {
@@ -859,3 +902,30 @@ class MockBackend {
 }
 
 export const mockBackend = new MockBackend();
+
+export type MockStoreEvent = {
+  type: string;
+  orderId?: string;
+  orderNumber?: string;
+  status?: string;
+};
+
+type MockStoreListener = (event: MockStoreEvent) => void;
+const mockStoreListeners = new Set<MockStoreListener>();
+
+export function subscribeMockStore(listener: MockStoreListener): () => void {
+  mockStoreListeners.add(listener);
+  return () => {
+    mockStoreListeners.delete(listener);
+  };
+}
+
+export function emitMockStore(event: MockStoreEvent) {
+  mockStoreListeners.forEach((fn) => {
+    try {
+      fn(event);
+    } catch {
+      // safe fallback
+    }
+  });
+}

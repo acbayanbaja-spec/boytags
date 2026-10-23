@@ -19,13 +19,14 @@ import {
   CheckCircle2,
   ChefHat,
   Compass,
+  Lock,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { formatPeso } from "@/lib/utils";
 import { sound } from "@/lib/sound";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
-import { Button, Card, Skeleton, SafeImage } from "@/components/ui";
+import { Button, Card, Skeleton, SafeImage, Modal } from "@/components/ui";
 import { DishCustomizerModal } from "@/components/DishCustomizerModal";
 import type { Product } from "@/types";
 
@@ -40,6 +41,7 @@ export function HomePage() {
   const { user } = useAuth();
   const { add } = useCart();
   const [customizingProduct, setCustomizingProduct] = useState<Product | null>(null);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
 
   const { data: products, isLoading } = useQuery<Product[]>({
     queryKey: ["products"],
@@ -70,6 +72,15 @@ export function HomePage() {
   function handleOpenCustomizer(product: Product) {
     sound.play("click");
     setCustomizingProduct(product);
+  }
+
+  function handleOrderClick(product: Product) {
+    if (!user) {
+      sound.play("alert");
+      setAuthModalOpen(true);
+      return;
+    }
+    handleOpenCustomizer(product);
   }
 
   return (
@@ -184,11 +195,19 @@ export function HomePage() {
                 <div className="mt-4 pt-3 border-t border-white/10 flex gap-2">
                   <Button
                     onClick={() => {
-                      if (wholeProduct) handleOpenCustomizer(wholeProduct);
+                      if (wholeProduct) handleOrderClick(wholeProduct);
                     }}
                     className="w-full text-xs font-bold py-3 bg-roast hover:bg-roast-deep shadow-md"
                   >
-                    <SlidersHorizontal className="h-3.5 w-3.5 mr-1.5" /> Order Now • Choose Cut & Sawsawan
+                    {user ? (
+                      <>
+                        <SlidersHorizontal className="h-3.5 w-3.5 mr-1.5" /> Order Now • Choose Cut & Sawsawan
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="h-3.5 w-3.5 mr-1.5" /> Sign In to Order • Whole Lechon Manok
+                      </>
+                    )}
                   </Button>
                 </div>
               </div>
@@ -272,21 +291,26 @@ export function HomePage() {
                       </p>
                     </div>
 
-                    {/* Order Now Button (Phase 8 requirement) */}
+                    {/* Order / Sign-in to Order Button */}
                     <div className="mt-4 pt-3 border-t border-line/60">
                       <Button
                         variant={isOut ? "outline" : "primary"}
                         size="sm"
                         disabled={isOut}
-                        onClick={() => handleOpenCustomizer(product)}
+                        onClick={() => handleOrderClick(product)}
                         className="w-full text-xs font-bold py-2.5 flex items-center justify-center gap-1.5"
                       >
                         {isOut ? (
                           "Sold Out Today"
-                        ) : (
+                        ) : user ? (
                           <>
                             <SlidersHorizontal className="h-3.5 w-3.5" />
                             Order Now
+                          </>
+                        ) : (
+                          <>
+                            <Lock className="h-3.5 w-3.5" />
+                            Sign In to Order
                           </>
                         )}
                       </Button>
@@ -480,6 +504,62 @@ export function HomePage() {
         open={Boolean(customizingProduct)}
         onClose={() => setCustomizingProduct(null)}
       />
+
+      {/* Sign In Required Modal */}
+      <Modal
+        open={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        title="Sign In Required to Order"
+        maxWidth="max-w-md"
+      >
+        <div className="space-y-5 text-center py-2">
+          <div className="mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-gradient-to-br from-orange-500 via-roast to-amber-700 text-white shadow-lg shadow-roast/30">
+            <Lock className="h-8 w-8" />
+          </div>
+
+          <div className="space-y-1.5">
+            <h3 className="display text-xl font-bold text-ink">
+              Please Sign In Before Ordering
+            </h3>
+            <p className="text-xs text-muted leading-relaxed max-w-sm mx-auto">
+              To ensure your Boytag's charcoal roast feast is prepared fresh, accurately tracked
+              with live pit telemetry, and delivered promptly to your doorstep in Tupi, please sign in or register first.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-amber-300 bg-amber-50/80 p-3.5 text-xs text-amber-950 text-left space-y-2">
+            <div className="font-bold flex items-center gap-1.5 text-amber-900">
+              <Sparkles className="h-4 w-4 text-amber-600" />
+              <span>Ordering Member Benefits:</span>
+            </div>
+            <ul className="list-disc list-inside space-y-1 text-[11px] text-amber-900/80">
+              <li>Live charcoal pit and kitchen telemetry updates</li>
+              <li>Estimated delivery arrival time shown directly in your account</li>
+              <li>Instant in-app notification the moment your roast is done</li>
+            </ul>
+          </div>
+
+          <div className="space-y-2 pt-2">
+            <Link to="/login" className="block w-full">
+              <Button size="lg" className="w-full font-bold shadow-md shadow-roast/25 py-3 text-sm">
+                Sign In to My Account <ArrowRight className="h-4 w-4 ml-1.5" />
+              </Button>
+            </Link>
+            <Link to="/login?mode=register" className="block w-full">
+              <Button size="lg" variant="outline" className="w-full font-bold py-3 text-sm">
+                Create Free Customer Account
+              </Button>
+            </Link>
+            <button
+              type="button"
+              onClick={() => setAuthModalOpen(false)}
+              className="text-xs font-semibold text-muted hover:text-ink pt-1 transition"
+            >
+              Continue Browsing Menu Preview
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

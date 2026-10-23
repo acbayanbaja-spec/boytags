@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { api } from "@/lib/api";
-import { formatDateTime, formatPeso, formatTime } from "@/lib/utils";
+import { formatDateTime, formatPeso, formatTime, formatDeliveryDateLabel } from "@/lib/utils";
 import { sound } from "@/lib/sound";
 import { useAuth } from "@/context/AuthContext";
 import { useRealtime } from "@/hooks/useRealtime";
@@ -304,6 +304,91 @@ export function OrderTrackingPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Pending Delivery Schedule Banner */}
+      {order.status === "PENDING" && !isCancelled && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-3xl border-2 border-amber-400 bg-gradient-to-r from-amber-50 via-orange-50/70 to-amber-50 p-5 text-amber-950 shadow-md"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-4">
+              <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-amber-500 text-white shadow-md">
+                <Clock className="h-6 w-6 animate-pulse" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-amber-500 animate-ping" />
+                  <h3 className="font-bold text-base text-ink">
+                    Pending Kitchen Confirmation — Estimated Delivery Schedule
+                  </h3>
+                </div>
+                <p className="text-xs leading-relaxed text-amber-950/80">
+                  {isDelivery ? "Your order will be delivered to your address at approximately " : "Your order will be ready for pickup at approximately "}
+                  <strong className="text-roast text-base font-extrabold underline decoration-roast/40 decoration-2">
+                    {formatTime(order.scheduledAt)}
+                  </strong>{" "}
+                  <span className="font-semibold text-muted">({formatDeliveryDateLabel(order.scheduledAt)})</span>.
+                  Our Poblacion, Tupi roasters are preparing to skewer and roast your ticket.
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-amber-300 bg-white/80 px-4 py-2 text-center shrink-0 shadow-xs">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted block">
+                Target Arrival
+              </span>
+              <span className="display text-xl font-bold text-roast block">
+                {formatTime(order.scheduledAt)}
+              </span>
+              <span className="text-[10px] text-muted">~20–30 mins window</span>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Completed Celebration Banner */}
+      {isCompleted && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="rounded-3xl border-2 border-leaf/40 bg-gradient-to-r from-emerald-50 via-leaf-soft/60 to-emerald-50 p-6 text-emerald-950 shadow-md"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-4">
+              <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-leaf text-white shadow-md">
+                <Sparkles className="h-7 w-7 animate-bounce" />
+              </div>
+              <div className="space-y-1">
+                <div className="inline-flex items-center gap-2 rounded-full bg-leaf px-3 py-0.5 text-xs font-bold text-white shadow-xs">
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Order Completed & Delivered!
+                </div>
+                <h3 className="display text-xl font-bold text-ink">
+                  Salamat sa pag-order sa Boytag's! 🎉
+                </h3>
+                <p className="text-xs text-emerald-900 leading-relaxed">
+                  {isDelivery
+                    ? `Your feast was delivered successfully at ${formatTime(order.updatedAt || order.scheduledAt)}. We hope you love the crisp golden skin and juicy charcoal roast!`
+                    : `Your feast was picked up at our Poblacion counter at ${formatTime(order.updatedAt || order.scheduledAt)}. Enjoy your meal!`}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                variant="glow"
+                size="sm"
+                onClick={() => setRatingOpen(true)}
+                className="text-xs font-bold shadow-md shadow-amber-400/20"
+              >
+                <Star className="h-4 w-4 mr-1.5 fill-amber-300" />
+                Rate This Feast
+              </Button>
+            </div>
+          </div>
+        </motion.div>
       )}
 
       {/* State Machine Visual Progress Track */}

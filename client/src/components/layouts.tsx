@@ -24,7 +24,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import { useRealtime } from "@/hooks/useRealtime";
 import { api } from "@/lib/api";
-import { cn } from "@/lib/utils";
+import { cn, formatTime } from "@/lib/utils";
 import { Button, SoundToggle } from "@/components/ui";
 import type { Order } from "@/types";
 
@@ -212,6 +212,13 @@ export function StoreShell() {
                   <span className="h-2 w-2 rounded-full bg-amber-300 animate-ping" />
                   <span className="font-semibold">
                     Order {liveOrder.orderNumber}: {liveOrder.status.replace(/_/g, " ")}
+                  </span>
+                  <span className="hidden sm:inline text-amber-200">
+                    • {liveOrder.status === "PENDING"
+                      ? `Pending: Delivered at ~${formatTime(liveOrder.scheduledAt)}`
+                      : liveOrder.type === "DELIVERY"
+                      ? `Est. Delivery: ${formatTime(liveOrder.scheduledAt)}`
+                      : `Est. Pickup: ${formatTime(liveOrder.scheduledAt)}`}
                   </span>
                 </div>
                 <Link

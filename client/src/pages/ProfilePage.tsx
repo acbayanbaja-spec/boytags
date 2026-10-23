@@ -1,10 +1,29 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { User, Mail, Phone, Shield, LogOut, CheckCircle2, AlertCircle, ClipboardList, Bell, ChefHat, Store } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  User,
+  Mail,
+  Phone,
+  Shield,
+  LogOut,
+  CheckCircle2,
+  AlertCircle,
+  ClipboardList,
+  Bell,
+  ChefHat,
+  Store,
+  Clock,
+  Truck,
+  ArrowRight,
+  Flame,
+} from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import { sound } from "@/lib/sound";
-import { Button, Card, Field, inputClass } from "@/components/ui";
+import { formatTime, formatDeliveryDateLabel, formatPeso } from "@/lib/utils";
+import { Button, Card, Field, StatusBadge, inputClass } from "@/components/ui";
+import type { Order } from "@/types";
 import { toast } from "sonner";
 
 export function ProfilePage() {
@@ -13,6 +32,17 @@ export function ProfilePage() {
   const [phone, setPhone] = useState(user?.phone || "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const { data: customerOrders } = useQuery<Order[]>({
+    queryKey: ["orders", "profile-summary", user?.id],
+    queryFn: () => (user?.role === "CUSTOMER" ? api<Order[]>("/api/orders") : Promise.resolve([])),
+    enabled: Boolean(user?.role === "CUSTOMER"),
+    refetchInterval: 6000,
+  });
+
+  const activeOrders = customerOrders?.filter((o) =>
+    ["PENDING", "CONFIRMED", "PREPARING", "READY", "OUT_FOR_DELIVERY"].includes(o.status),
+  ) || [];
 
   async function handleUpdate(e: React.FormEvent) {
     e.preventDefault();
@@ -60,6 +90,101 @@ export function ProfilePage() {
         <div className="flex items-center gap-2 rounded-2xl border border-danger/30 bg-rose-50 p-4 text-xs text-danger font-bold">
           <AlertCircle className="h-4 w-4 shrink-0" />
           <span>{error}</span>
+        </div>
+      )}
+
+      {/* Active Orders & Live Delivery Schedule in Account */}
+      {activeOrders.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="display text-lg font-bold text-ink flex items-center gap-2">
+              <Clock className="h-4 w-4 text-roast" />
+              <span>Active Order Delivery Schedule</span>
+            </h2>
+            <Link to="/orders" className="text-xs font-bold text-roast hover:underline">
+              View all orders →
+            </Link>
+          </div>
+
+          <div className="space-y-3">
+            {activeOrders.map((order) => {
+              const isDelivery = order.type === "DELIVERY";
+              const isPending = order.status === "PENDING";
+
+              return (
+                <Card
+                  key={order.id}
+                  className={`p-5 transition hover:shadow-md ${
+                    isPending
+                      ? "border-amber-400 bg-gradient-to-br from-paper via-amber-50/30 to-paper"
+                      : "border-roast/30 bg-gradient-to-br from-paper via-orange-50/20 to-paper"
+                  }`}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-line/60 pb-3">
+                    <div className="flex items-center gap-2.5">
+                      <span className="display font-bold text-base text-ink">{order.orderNumber}</span>
+                      <StatusBadge status={order.status} />
+                      <span className="text-xs text-muted">
+                        {isDelivery ? "Doorstep Delivery" : "Poblacion HQ Pickup"}
+                      </span>
+                    </div>
+                    <span className="display font-bold text-roast text-base">{formatPeso(order.total)}</span>
+                  </div>
+
+                  <div className="py-3">
+                    {isPending ? (
+                      <div className="flex items-start gap-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 p-3 text-xs text-amber-950">
+                        <Clock className="h-5 w-5 text-amber-600 shrink-0 animate-pulse mt-0.5" />
+                        <div className="space-y-0.5">
+                          <span className="font-bold text-amber-900 block text-xs">
+                            ⏳ Pending Kitchen Confirmation:
+                          </span>
+                          <p className="text-sm text-ink font-semibold">
+                            {isDelivery ? "Will be delivered at approximately " : "Ready for pickup at approximately "}
+                            <strong className="text-roast text-base font-extrabold underline decoration-roast/30 decoration-2">
+                              {formatTime(order.scheduledAt)}
+                            </strong>{" "}
+                            <span className="text-muted text-xs">({formatDeliveryDateLabel(order.scheduledAt)})</span>
+                          </p>
+                          <p className="text-[11px] text-amber-800/80">
+                            Our pitmasters are reviewing your ticket. Delivery takes approx. 20–30 mins.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3 rounded-2xl bg-orange-50/80 border border-roast/20 p-3 text-xs text-amber-950">
+                        {order.status === "OUT_FOR_DELIVERY" ? (
+                          <Truck className="h-5 w-5 text-roast shrink-0 animate-bounce" />
+                        ) : (
+                          <Flame className="h-5 w-5 text-roast shrink-0" />
+                        )}
+                        <div>
+                          <span className="font-bold text-roast text-xs block">
+                            {order.status === "OUT_FOR_DELIVERY" ? "🚀 Rider on the way!" : "Estimated Delivery Time:"}
+                          </span>
+                          <span className="text-sm font-extrabold text-ink">
+                            {formatTime(order.scheduledAt)}{" "}
+                            <span className="text-xs text-muted font-normal">({formatDeliveryDateLabel(order.scheduledAt)})</span>
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-[11px] text-muted line-clamp-1 max-w-[250px]">
+                      {order.items?.map((i) => `${i.quantity}× ${i.productName}`).join(", ")}
+                    </span>
+                    <Link to={`/orders/${order.id}`}>
+                      <Button size="sm" className="text-xs font-bold shadow-xs">
+                        Track Live Telemetry <ArrowRight className="h-3.5 w-3.5 ml-1" />
+                      </Button>
+                    </Link>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
         </div>
       )}
 

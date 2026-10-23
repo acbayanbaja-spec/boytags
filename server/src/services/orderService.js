@@ -298,14 +298,33 @@ export async function updateStatus(id, status, actor) {
     CANCELLED: "cancelled",
     UNCLAIMED: "marked unclaimed",
   };
-  await notifyUser({
-    userId: current.customerId,
-    type: "STATUS",
-    title: `Order ${current.orderNumber}`,
-    body: `Your order is now ${labels[status] || status.toLowerCase()}.`,
+  if (status === "COMPLETED") {
+    await notifyUser({
+      userId: current.customerId,
+      type: "ORDER_COMPLETED",
+      title: `Order ${current.orderNumber} is Done! 🎉`,
+      body: current.type === "DELIVERY"
+        ? `Your order ${current.orderNumber} has been safely delivered to your doorstep in Tupi! Salamat sa pag-order sa Boytag's Lechon Manok!`
+        : `Your order ${current.orderNumber} has been picked up and completed at our Poblacion HQ! Salamat sa pag-order sa Boytag's!`,
+      orderId: id,
+    });
+  } else {
+    await notifyUser({
+      userId: current.customerId,
+      type: "STATUS",
+      title: `Order ${current.orderNumber}`,
+      body: `Your order is now ${labels[status] || status.toLowerCase()}.`,
+      orderId: id,
+    });
+  }
+  realtime.broadcast({
+    type: status === "COMPLETED" ? "order-completed" : "order",
+    audience: "all",
     orderId: id,
+    userId: current.customerId,
+    orderNumber: current.orderNumber,
+    status,
   });
-  realtime.broadcast({ type: "order", audience: "all", orderId: id, userId: current.customerId });
   return serializeOrder(updated);
 }
 

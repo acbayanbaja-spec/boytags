@@ -1,7 +1,10 @@
-import { asyncHandler, created, ok } from "../utils/http.js";
+import { asyncHandler, created, ok, AppError } from "../utils/http.js";
 import * as orderService from "../services/orderService.js";
 
 export const create = asyncHandler(async (req, res) => {
+  if (!req.user) {
+    throw new AppError("You must be logged in to place an order. Please sign in.", 401, "UNAUTHORIZED");
+  }
   const data = await orderService.createOrder(req.user, req.body);
   created(res, data);
 });

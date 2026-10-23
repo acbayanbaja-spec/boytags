@@ -20,6 +20,7 @@ import {
   CreditCard,
   Banknote,
   Heart,
+  Lock,
 } from "lucide-react";
 import type { Order, OrderType } from "@/types";
 import { toast } from "sonner";
@@ -75,6 +76,12 @@ export function CheckoutPage() {
   async function handlePlaceOrder(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
+    if (!user) {
+      setError("Please sign in or create an account before placing an order.");
+      navigate("/login?next=/checkout");
+      return;
+    }
 
     if (items.length === 0) {
       setError("Your cart is empty.");

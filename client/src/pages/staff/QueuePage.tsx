@@ -55,7 +55,11 @@ export function StaffQueuePage() {
       }),
     onSuccess: (updated) => {
       sound.play("advance");
-      toast.success(`Order ${updated.orderNumber} advanced to ${STATUS_LABEL[updated.status]}!`);
+      if (updated.status === "COMPLETED") {
+        toast.success(`Order ${updated.orderNumber} Completed! Customer has been notified 🎉`);
+      } else {
+        toast.success(`Order ${updated.orderNumber} advanced to ${STATUS_LABEL[updated.status]}!`);
+      }
       void queryClient.invalidateQueries({ queryKey: ["queue"] });
       void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       if (selectedOrder?.id === updated.id) {

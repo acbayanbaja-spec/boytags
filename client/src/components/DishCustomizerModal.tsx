@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { Plus, Minus, ShoppingBag, Flame, Sparkles, Check } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Plus, Minus, ShoppingBag, Flame, Sparkles, Check, Lock } from "lucide-react";
 import { Modal, Button, Field, inputClass } from "@/components/ui";
 import { formatPeso } from "@/lib/utils";
 import { sound } from "@/lib/sound";
+import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import type { Product } from "@/types";
 import { toast } from "sonner";
@@ -16,7 +18,9 @@ export function DishCustomizerModal({
   open: boolean;
   onClose: () => void;
 }) {
+  const { user } = useAuth();
   const { add } = useCart();
+  const navigate = useNavigate();
   const [quantity, setQuantity] = useState(1);
   const [cut, setCut] = useState("Whole (Uncut)");
   const [sauce, setSauce] = useState("House Garlic Liver Gravy");
@@ -81,6 +85,15 @@ export function DishCustomizerModal({
       );
     }
 
+    if (!user) {
+      toast.info(`Dish selected! Please sign in to place your order.`, {
+        description: "Redirecting to sign-in page...",
+      });
+      onClose();
+      navigate("/login?next=/checkout");
+      return;
+    }
+
     toast.success(`Added ${quantity}× ${product.name} to order!`, {
       description: `${isChicken ? `${cut} • ` : ""}${sauce} • Added to bag`,
     });
@@ -103,6 +116,16 @@ export function DishCustomizerModal({
             <p className="display text-sm font-bold text-roast mt-1">{formatPeso(product.price)}</p>
           </div>
         </div>
+
+        {/* Guest Warning */}
+        {!user && (
+          <div className="flex items-center gap-2.5 rounded-2xl border border-amber-300 bg-amber-50/80 p-3 text-xs text-amber-950 font-medium">
+            <Lock className="h-4 w-4 text-roast shrink-0" />
+            <div>
+              <span className="font-bold">Sign In Required to Order:</span> You will be asked to sign in or register before completing your order so we can track and notify your delivery in Tupi.
+            </div>
+          </div>
+        )}
 
         {/* Cut Options (if Chicken) */}
         {isChicken && (
@@ -230,8 +253,17 @@ export function DishCustomizerModal({
             onClick={handleAdd}
             className="flex-1 py-3 text-sm font-bold shadow-lg shadow-roast/20"
           >
-            <ShoppingBag className="h-4 w-4 mr-1.5" />
-            Add to Order • {formatPeso(totalPrice)}
+            {user ? (
+              <>
+                <ShoppingBag className="h-4 w-4 mr-1.5" />
+                Add to Order • {formatPeso(totalPrice)}
+              </>
+            ) : (
+              <>
+                <Lock className="h-4 w-4 mr-1.5" />
+                Sign In to Order • {formatPeso(totalPrice)}
+              </>
+            )}
           </Button>
         </div>
       </div>
