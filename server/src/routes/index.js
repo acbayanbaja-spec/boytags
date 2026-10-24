@@ -40,6 +40,8 @@ router.get("/orders/queue", authenticate, requireRoles("STAFF", "ADMIN"), orders
 router.get("/orders/:id", authenticate, orders.get);
 router.patch("/orders/:id", authenticate, validate(updateOrderSchema), orders.update);
 router.patch("/orders/:id/status", authenticate, requireRoles("STAFF", "ADMIN"), validate(statusSchema), orders.status);
+router.post("/orders/:id/complete", authenticate, orders.completeByCustomer);
+router.post("/orders/:id/rider-arrived", authenticate, requireRoles("STAFF", "ADMIN"), orders.riderArrived);
 router.post("/orders/:id/cancel", authenticate, validate(cancelSchema), orders.cancel);
 router.get("/orders/:id/history", authenticate, orders.history);
 

@@ -207,6 +207,61 @@ async function main() {
         soldOut: true,
       },
     }),
+    prisma.product.create({
+      data: {
+        categoryId: lechon.id,
+        name: "Crispy Lechon Porchetta Roll",
+        slug: "crispy-lechon-porchetta-roll",
+        description: "Slow-roasted pork belly roll with ultra-crispy crackling skin, stuffed with native lemongrass, garlic cloves, and scallions. 1kg slice.",
+        price: 580,
+        imageUrl: "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=1200&q=80",
+        availableQty: 15,
+      },
+    }),
+    prisma.product.create({
+      data: {
+        categoryId: grilled.id,
+        name: "Poblacion Sizzling Chicken Sisig",
+        slug: "poblacion-sizzling-chicken-sisig",
+        description: "Chopped crispy roast chicken tossed with savory chicken liver glaze, calamansi, native onions, and fiery Mindanao sili labuyo.",
+        price: 245,
+        imageUrl: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=1200&q=80",
+        availableQty: 25,
+      },
+    }),
+    prisma.product.create({
+      data: {
+        categoryId: grilled.id,
+        name: "Inasal Pecho Large with Garlic Rice",
+        slug: "inasal-pecho-large-garlic-rice",
+        description: "Charcoal-grilled quarter chicken breast & wing basted with authentic annatto chicken oil. Served with warm garlic rice and spiced sinamak vinegar.",
+        price: 195,
+        imageUrl: images.inasal,
+        availableQty: 22,
+      },
+    }),
+    prisma.product.create({
+      data: {
+        categoryId: extras.id,
+        name: "Crispy Kangkong with Garlic Dip",
+        slug: "crispy-kangkong-garlic-dip",
+        description: "Fresh local river spinach flash-fried in golden tempura batter with toasted garlic bits and house spicy garlic-mayo sawsawan.",
+        price: 120,
+        imageUrl: "https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=1200&q=80",
+        availableQty: 35,
+      },
+    }),
+    prisma.product.create({
+      data: {
+        categoryId: drinks.id,
+        name: "Lemongrass Calamansi Quencher (1L Pitcher)",
+        slug: "lemongrass-calamansi-quencher-1l",
+        description: "Freshly brewed wild tanglad (lemongrass) tea infused with pure Tupi calamansi juice and wild Mindanao honey over crushed ice. Serves 3–4.",
+        price: 95,
+        imageUrl: images.drinks,
+        availableQty: 40,
+      },
+    }),
   ]);
 
   await prisma.setting.create({

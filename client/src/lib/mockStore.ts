@@ -197,6 +197,68 @@ export const INITIAL_PRODUCTS: Product[] = [
     active: true,
     category: { id: "cat_drinks", name: "Drinks", slug: "drinks" },
   },
+  {
+    id: "prod_porchetta",
+    name: "Crispy Lechon Porchetta Roll",
+    slug: "crispy-lechon-porchetta-roll",
+    description: "Slow-roasted pork belly roll with ultra-crispy crackling skin, stuffed with native lemongrass, garlic cloves, and scallions. 1kg slice.",
+    price: 580,
+    imageUrl: "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=1200&q=80",
+    availableQty: 15,
+    soldOut: false,
+    active: true,
+    bestseller: true,
+    category: { id: "cat_lechon", name: "Lechon Manok", slug: "lechon-manok" },
+  },
+  {
+    id: "prod_sisig",
+    name: "Poblacion Sizzling Chicken Sisig",
+    slug: "poblacion-sizzling-chicken-sisig",
+    description: "Chopped crispy roast chicken tossed with savory chicken liver glaze, calamansi, native onions, and fiery Mindanao sili labuyo.",
+    price: 245,
+    imageUrl: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=1200&q=80",
+    availableQty: 25,
+    soldOut: false,
+    active: true,
+    featured: true,
+    category: { id: "cat_grilled", name: "Grilled & Fried", slug: "grilled-fried" },
+  },
+  {
+    id: "prod_inasal_pecho",
+    name: "Inasal Pecho Large with Garlic Rice",
+    slug: "inasal-pecho-large-garlic-rice",
+    description: "Charcoal-grilled quarter chicken breast & wing basted with authentic annatto chicken oil. Served with warm garlic rice and spiced sinamak vinegar.",
+    price: 195,
+    imageUrl: "/images/chicken-inasal.jpg",
+    availableQty: 22,
+    soldOut: false,
+    active: true,
+    category: { id: "cat_grilled", name: "Grilled & Fried", slug: "grilled-fried" },
+  },
+  {
+    id: "prod_kangkong",
+    name: "Crispy Kangkong with Garlic Dip",
+    slug: "crispy-kangkong-garlic-dip",
+    description: "Fresh local river spinach flash-fried in golden tempura batter with toasted garlic bits and house spicy garlic-mayo sawsawan.",
+    price: 120,
+    imageUrl: "https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=1200&q=80",
+    availableQty: 35,
+    soldOut: false,
+    active: true,
+    category: { id: "cat_extras", name: "Rice & Sides", slug: "rice-sides" },
+  },
+  {
+    id: "prod_quencher",
+    name: "Lemongrass Calamansi Quencher (1L Pitcher)",
+    slug: "lemongrass-calamansi-quencher-1l",
+    description: "Freshly brewed wild tanglad (lemongrass) tea infused with pure Tupi calamansi juice and wild Mindanao honey over crushed ice. Serves 3–4.",
+    price: 95,
+    imageUrl: "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=1200&q=80",
+    availableQty: 40,
+    soldOut: false,
+    active: true,
+    category: { id: "cat_drinks", name: "Drinks", slug: "drinks" },
+  },
 ];
 
 export const INITIAL_ORDERS: Order[] = [
@@ -439,7 +501,7 @@ class MockBackend {
 
   private load() {
     try {
-      const STORE_VERSION = "boytags.mock.v5";
+      const STORE_VERSION = "boytags.mock.v8";
       if (typeof window !== "undefined" && localStorage.getItem("boytags.mock.ver") !== STORE_VERSION) {
         localStorage.removeItem("boytags.mock.products");
         localStorage.removeItem("boytags.mock.categories");
@@ -801,6 +863,26 @@ class MockBackend {
       orderId: order.id,
       orderNumber: order.orderNumber,
       status: "CANCELLED",
+    });
+    return order;
+  }
+
+  public notifyRiderArrived(id: string): Order {
+    const order = this.getOrder(id);
+    this.notifications.unshift({
+      id: `notif_${Date.now()}_arrived`,
+      orderId: order.id,
+      type: "RIDER_ARRIVED",
+      title: "Kuya Jun (Rider) is Outside Your House! 🛵🔔",
+      body: `Your Boytag's rider has arrived at ${order.delivery?.address || 'your gate'} with your hot roast chicken feast! Please meet the rider at your gate.`,
+      read: false,
+      createdAt: new Date().toISOString(),
+    });
+    this.save();
+    emitMockStore({
+      type: "rider-arrived",
+      orderId: order.id,
+      orderNumber: order.orderNumber,
     });
     return order;
   }

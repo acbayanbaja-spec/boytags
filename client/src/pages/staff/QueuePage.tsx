@@ -18,6 +18,7 @@ import {
   Printer,
   Columns,
   LayoutGrid,
+  BellRing,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { formatDateTime, formatPeso, formatTime, waitingLabel } from "@/lib/utils";
@@ -69,6 +70,25 @@ export function StaffQueuePage() {
     onError: (err: Error) => {
       sound.play("alert");
       toast.error(err.message || "Failed to update status.");
+    },
+  });
+
+  const riderArrivedMutation = useMutation({
+    mutationFn: (id: string) =>
+      api<Order>(`/api/orders/${id}/rider-arrived`, {
+        method: "POST",
+      }),
+    onSuccess: (updated) => {
+      sound.play("advance");
+      toast.success(`Doorstep alert sent to ${updated.customer?.name || "customer"}! Kuya Jun is outside the gate. 🛵`);
+      void queryClient.invalidateQueries({ queryKey: ["queue"] });
+      if (selectedOrder?.id === updated.id) {
+        setSelectedOrder(updated);
+      }
+    },
+    onError: (err: Error) => {
+      sound.play("alert");
+      toast.error(err.message || "Failed to send doorstep alert.");
     },
   });
 
@@ -304,6 +324,17 @@ export function StaffQueuePage() {
                             >
                               <Printer className="h-3.5 w-3.5" />
                             </button>
+                            {order.status === "OUT_FOR_DELIVERY" && (
+                              <button
+                                type="button"
+                                onClick={() => riderArrivedMutation.mutate(order.id)}
+                                disabled={riderArrivedMutation.isPending}
+                                className="rounded-lg p-1 text-amber-600 hover:text-amber-700 hover:bg-amber-100 transition"
+                                title="Notify customer: Rider arrived at doorstep"
+                              >
+                                <BellRing className="h-3.5 w-3.5" />
+                              </button>
+                            )}
                             {action && (
                               <Button
                                 size="sm"
@@ -446,6 +477,20 @@ export function StaffQueuePage() {
                     Inspect
                   </Button>
 
+                  {order.status === "OUT_FOR_DELIVERY" && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-9 px-2.5 text-xs font-bold border-amber-400 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                      loading={riderArrivedMutation.isPending}
+                      onClick={() => riderArrivedMutation.mutate(order.id)}
+                      title="Send doorstep arrival notification to customer"
+                    >
+                      <BellRing className="h-3.5 w-3.5 mr-1 text-amber-600 animate-bounce" />
+                      Rider at Gate
+                    </Button>
+                  )}
+
                   {action ? (
                     <Button
                       size="sm"
@@ -530,7 +575,18 @@ export function StaffQueuePage() {
               <OrderTimeline history={selectedOrder.history || []} />
             </div>
 
-            <div className="pt-2 flex justify-end gap-2">
+            <div className="pt-2 flex flex-wrap justify-end gap-2">
+              {selectedOrder.status === "OUT_FOR_DELIVERY" && (
+                <Button
+                  variant="outline"
+                  className="border-amber-400 bg-amber-50 text-amber-800 hover:bg-amber-100 font-bold"
+                  loading={riderArrivedMutation.isPending}
+                  onClick={() => riderArrivedMutation.mutate(selectedOrder.id)}
+                >
+                  <BellRing className="h-3.5 w-3.5 mr-1 text-amber-600 animate-bounce" />
+                  Notify Doorstep Arrival
+                </Button>
+              )}
               <Button
                 variant="outline"
                 onClick={() => {

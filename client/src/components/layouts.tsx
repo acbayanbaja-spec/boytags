@@ -49,6 +49,7 @@ export function Brand({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
 export function StoreShell() {
   const { user, logout } = useAuth();
   const { count } = useCart();
+  const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   useRealtime();
@@ -79,6 +80,10 @@ export function StoreShell() {
         ["PENDING", "CONFIRMED", "PREPARING", "READY", "OUT_FOR_DELIVERY"].includes(o.status),
       )
     : null;
+
+  const isAlreadyViewingLiveOrder =
+    Boolean(liveOrder) &&
+    (location.pathname === `/orders/${liveOrder?.id}` || location.pathname === `/orders/${liveOrder?.orderNumber}`);
 
   function handleLogout() {
     logout();
@@ -205,17 +210,18 @@ export function StoreShell() {
           </div>
 
           {/* Active Live Order Pill Banner (shows ONLY when an authenticated customer has an order cooking / delivering) */}
-          {Boolean(user && isCustomer) && liveOrder && (
+          {Boolean(user && isCustomer) && liveOrder && !isAlreadyViewingLiveOrder && (
             <div className="bg-gradient-to-r from-orange-700 via-roast to-amber-700 text-white text-xs py-1.5 px-4 shadow-inner">
               <div className="mx-auto max-w-6xl flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="h-2 w-2 rounded-full bg-amber-300 animate-ping" />
                   <span className="font-semibold">
-                    Order {liveOrder.orderNumber}: {liveOrder.status.replace(/_/g, " ")}
+                    {location.pathname.startsWith("/orders/") ? "You also have an active order: " : "Active Order: "}
+                    {liveOrder.orderNumber} ({liveOrder.status.replace(/_/g, " ")})
                   </span>
                   <span className="hidden sm:inline text-amber-200">
                     • {liveOrder.status === "PENDING"
-                      ? `Pending: Delivered at ~${formatTime(liveOrder.scheduledAt)}`
+                      ? `Delivered at ~${formatTime(liveOrder.scheduledAt)}`
                       : liveOrder.type === "DELIVERY"
                       ? `Est. Delivery: ${formatTime(liveOrder.scheduledAt)}`
                       : `Est. Pickup: ${formatTime(liveOrder.scheduledAt)}`}

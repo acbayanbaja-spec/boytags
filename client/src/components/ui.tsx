@@ -112,7 +112,7 @@ export function StatusBadge({ status }: { status: OrderStatus }) {
     PREPARING: { bg: "bg-orange-100/90 border border-orange-300", text: "text-orange-950", dot: "bg-orange-600", pulse: true },
     READY: { bg: "bg-emerald-100/80 border border-emerald-300", text: "text-emerald-950", dot: "bg-emerald-600", pulse: true },
     OUT_FOR_DELIVERY: { bg: "bg-indigo-100/80 border border-indigo-300", text: "text-indigo-950", dot: "bg-indigo-600", pulse: true },
-    COMPLETED: { bg: "bg-zinc-100 border border-zinc-300", text: "text-zinc-800", dot: "bg-zinc-500", pulse: false },
+    COMPLETED: { bg: "bg-leaf-soft border border-leaf/30", text: "text-leaf font-bold", dot: "bg-leaf", pulse: false },
     CANCELLED: { bg: "bg-rose-100 border border-rose-300", text: "text-rose-900", dot: "bg-rose-500", pulse: false },
     UNCLAIMED: { bg: "bg-red-600 text-white shadow-sm", text: "text-white font-bold", dot: "bg-white", pulse: true },
   };

@@ -21,6 +21,12 @@ export function useRealtime() {
           description: "Your order has been completed! Salamat sa pag-order sa Boytag's!",
         });
       }
+      if (event.type === "rider-arrived") {
+        sound.play("alert");
+        toast.info(`🛵 Kuya Jun is Outside Your House!`, {
+          description: `Rider has arrived with Order ${event.orderNumber || ""} at your gate! Please meet your rider.`,
+        });
+      }
       void queryClient.invalidateQueries({ queryKey: ["orders"] });
       void queryClient.invalidateQueries({ queryKey: ["order"] });
       void queryClient.invalidateQueries({ queryKey: ["notifications"] });
@@ -45,6 +51,13 @@ export function useRealtime() {
             sound.play("success");
             toast.success(`Order ${payload.orderNumber || ""} is Done! 🎉`, {
               description: "Your order has been completed and delivered! Salamat sa pag-order sa Boytag's!",
+            });
+          }
+
+          if (payload.type === "rider-arrived") {
+            sound.play("alert");
+            toast.info(`🛵 Kuya Jun is Outside Your House!`, {
+              description: `Rider has arrived with Order ${payload.orderNumber || ""} at your gate! Please meet your rider.`,
             });
           }
 

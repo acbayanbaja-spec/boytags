@@ -328,6 +328,91 @@ export async function updateStatus(id, status, actor) {
   return serializeOrder(updated);
 }
 
+export async function completeByCustomer(id, actor) {
+  const current = await prisma.order.findUnique({
+    where: { id },
+    include: { items: true, delivery: true, customer: true },
+  });
+  if (!current) throw new AppError("Order not found.", 404, "NOT_FOUND");
+  if (actor.role === "CUSTOMER" && current.customerId !== (actor.sub || actor.id)) {
+    throw new AppError("You cannot confirm this order.", 403, "FORBIDDEN");
+  }
+  if (!["READY", "OUT_FOR_DELIVERY"].includes(current.status)) {
+    throw new AppError("Order cannot be marked complete at its current stage.", 400, "INVALID_TRANSITION");
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const data = { status: "COMPLETED", priority: "NORMAL" };
+    const next = await tx.order.update({
+      where: { id },
+      data,
+      include: { items: true, delivery: true, customer: true },
+    });
+    await recordHistory(tx, {
+      orderId: id,
+      actor,
+      action: "DELIVERY_CONFIRMED",
+      previousValue: { status: current.status },
+      newValue: { status: "COMPLETED", confirmedBy: actor.name || "Customer" },
+    });
+    return next;
+  });
+
+  await notifyStaff({
+    type: "ORDER_COMPLETED",
+    title: `Order ${current.orderNumber} Confirmed Received`,
+    body: `${current.customer.name} confirmed receipt of their order!`,
+    orderId: id,
+  });
+
+  await notifyUser({
+    userId: current.customerId,
+    type: "ORDER_COMPLETED",
+    title: `Order ${current.orderNumber} is Done! 🎉`,
+    body: current.type === "DELIVERY"
+      ? `Your order ${current.orderNumber} has been safely received and completed! Salamat sa pag-order sa Boytag's!`
+      : `Your order ${current.orderNumber} has been picked up and completed! Enjoy your feast!`,
+    orderId: id,
+  });
+
+  realtime.broadcast({
+    type: "order-completed",
+    audience: "all",
+    orderId: id,
+    userId: current.customerId,
+    orderNumber: current.orderNumber,
+    status: "COMPLETED",
+  });
+
+  return serializeOrder(updated);
+}
+
+export async function notifyRiderArrived(id, actor) {
+  const current = await prisma.order.findUnique({
+    where: { id },
+    include: { customer: true, delivery: true },
+  });
+  if (!current) throw new AppError("Order not found.", 404, "NOT_FOUND");
+
+  await notifyUser({
+    userId: current.customerId,
+    type: "RIDER_ARRIVED",
+    title: "Kuya Jun (Rider) is Outside Your House! 🛵🔔",
+    body: `Your Boytag's rider has arrived at ${current.delivery?.address || 'your gate'} with your hot roast feast. Please meet the rider!`,
+    orderId: id,
+  });
+
+  realtime.broadcast({
+    type: "rider-arrived",
+    audience: "all",
+    orderId: id,
+    userId: current.customerId,
+    orderNumber: current.orderNumber,
+  });
+
+  return serializeOrder(current);
+}
+
 export async function cancelOrder(id, actor, reason) {
   const current = await prisma.order.findUnique({
     where: { id },

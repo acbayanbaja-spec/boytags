@@ -34,6 +34,16 @@ export const status = asyncHandler(async (req, res) => {
   ok(res, data);
 });
 
+export const completeByCustomer = asyncHandler(async (req, res) => {
+  const data = await orderService.completeByCustomer(req.params.id, req.user);
+  ok(res, data);
+});
+
+export const riderArrived = asyncHandler(async (req, res) => {
+  const data = await orderService.notifyRiderArrived(req.params.id, req.user);
+  ok(res, data);
+});
+
 export const cancel = asyncHandler(async (req, res) => {
   const data = await orderService.cancelOrder(req.params.id, req.user, req.body.reason);
   ok(res, data);

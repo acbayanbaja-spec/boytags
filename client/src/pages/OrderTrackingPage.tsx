@@ -27,6 +27,7 @@ import {
   Sparkles,
   PhoneCall,
   ShoppingBag,
+  BellRing,
 } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { api } from "@/lib/api";
@@ -98,6 +99,24 @@ export function OrderTrackingPage() {
     },
     onError: (err: Error) => {
       toast.error(err.message || "Failed to update order.");
+    },
+  });
+
+  const confirmReceivedMutation = useMutation({
+    mutationFn: () =>
+      api<Order>(`/api/orders/${id}/complete`, {
+        method: "POST",
+      }),
+    onSuccess: () => {
+      sound.play("success");
+      toast.success("Order confirmed as received! Salamat sa pag-order sa Boytag's! 🎉");
+      void queryClient.invalidateQueries({ queryKey: ["order", id] });
+      void queryClient.invalidateQueries({ queryKey: ["orders"] });
+      void queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      void queryClient.invalidateQueries({ queryKey: ["queue"] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to confirm order receipt.");
     },
   });
 
@@ -391,6 +410,127 @@ export function OrderTrackingPage() {
         </motion.div>
       )}
 
+      {/* Customer Confirmation Action Card */}
+      {(order.status === "OUT_FOR_DELIVERY" || (order.type === "PICKUP" && order.status === "READY")) && !isCompleted && !isCancelled && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-3xl border-2 border-leaf bg-gradient-to-r from-emerald-50 via-leaf-soft/50 to-emerald-50 p-6 text-emerald-950 shadow-lg shadow-leaf/10"
+        >
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
+            <div className="flex items-start gap-4">
+              <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-leaf text-white shadow-md shadow-leaf/30">
+                <CheckCircle2 className="h-8 w-8 animate-pulse" />
+              </div>
+              <div className="space-y-1">
+                <div className="inline-flex items-center gap-1.5 rounded-full bg-leaf px-3 py-0.5 text-xs font-bold text-white shadow-xs">
+                  {isDelivery ? "Rider at Your Location / In Transit" : "Ready at Poblacion Counter"}
+                </div>
+                <h3 className="display text-xl font-bold text-ink">
+                  {isDelivery ? "Have you received your Boytag's feast?" : "Did you pick up your Boytag's order?"}
+                </h3>
+                <p className="text-xs text-emerald-900 leading-relaxed max-w-xl">
+                  {isDelivery
+                    ? "Once Kuya Jun hands you your piping hot lechon chicken, press the button below to confirm receipt. This completes your order, turns your status green, and notifies kitchen staff."
+                    : "If our Poblacion counter staff handed you your warm roast chicken bag, confirm receipt here to conclude your ticket, turn status green, and notify kitchen dispatch."}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
+              <Button
+                variant="glow"
+                size="lg"
+                className="bg-leaf hover:bg-emerald-700 text-white font-extrabold shadow-lg shadow-leaf/30 text-sm gap-2 py-3 px-6 rounded-2xl"
+                loading={confirmReceivedMutation.isPending}
+                onClick={() => confirmReceivedMutation.mutate()}
+              >
+                <CheckCircle2 className="h-5 w-5" />
+                I Have Received My Order
+              </Button>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Live Rider & Doorstep Telemetry Card */}
+      {isDelivery && order.status === "OUT_FOR_DELIVERY" && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="rounded-3xl border-2 border-indigo-500 bg-gradient-to-br from-indigo-50 via-white to-sky-50 p-6 text-slate-900 shadow-md"
+        >
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-indigo-100 pb-4">
+            <div className="flex items-center gap-4">
+              <div className="relative grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-indigo-600 text-white shadow-md shadow-indigo-300">
+                <Truck className="h-7 w-7 animate-bounce" />
+                <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500" />
+                </span>
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 text-indigo-700 px-2.5 py-0.5 text-[11px] font-bold">
+                    Active Roadway Transit
+                  </span>
+                  <span className="text-xs text-muted font-medium">Tupi Delivery Zone</span>
+                </div>
+                <h3 className="display text-xl font-bold text-ink mt-0.5">
+                  Kuya Jun (Boytag's Rider) is Approaching Your Gate! 🛵
+                </h3>
+                <p className="text-xs text-slate-600">
+                  Thermal insulated carrier active: keeping skin crispy and chicken juicy.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <a
+                href="tel:09178882345"
+                className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 text-white px-4 py-2.5 text-xs font-bold hover:bg-indigo-700 transition shadow-md shadow-indigo-200"
+              >
+                <PhoneCall className="h-4 w-4" />
+                <span>Call Kuya Jun (0917-888-2345)</span>
+              </a>
+            </div>
+          </div>
+
+          {/* Live Doorstep Checklist & Proximity Details */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4 text-xs">
+            <div className="rounded-2xl bg-white border border-indigo-100 p-3 shadow-xs">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 block mb-1">
+                📍 Delivery Destination
+              </span>
+              <p className="font-bold text-ink truncate">{order.delivery?.address}</p>
+              {order.delivery?.landmark && (
+                <p className="text-[11px] text-muted mt-0.5 truncate">
+                  Near {order.delivery.landmark}
+                </p>
+              )}
+            </div>
+
+            <div className="rounded-2xl bg-white border border-indigo-100 p-3 shadow-xs">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 block mb-1">
+                🔔 Doorstep Checklist
+              </span>
+              <p className="font-semibold text-ink">
+                Prepare {formatPeso(order.total)} exact cash or GCash
+              </p>
+              <p className="text-[11px] text-muted mt-0.5">Please check your gate buzzer / listen for horn</p>
+            </div>
+
+            <div className="rounded-2xl bg-white border border-indigo-100 p-3 shadow-xs">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 block mb-1">
+                ⚡ Estimated Doorstep Window
+              </span>
+              <p className="font-bold text-ink">{formatTime(order.scheduledAt)} (Within 5-10 mins)</p>
+              <p className="text-[11px] text-muted mt-0.5">Rider dispatched directly from Poblacion Pit</p>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       {/* State Machine Visual Progress Track */}
       {!isCancelled && !isUnclaimed && (
         <Card className="p-6">
@@ -409,25 +549,25 @@ export function OrderTrackingPage() {
 
           <div className="relative grid grid-cols-3 sm:grid-cols-6 gap-2">
             {stages.map((stage, idx) => {
-              const isPast = currentIndex > idx;
-              const isCurrent = currentIndex === idx;
+              const isFinished = isCompleted || currentIndex > idx;
+              const isCurrent = !isCompleted && currentIndex === idx;
 
               return (
                 <div key={stage} className="flex flex-col items-center text-center">
                   <div
                     className={`grid h-11 w-11 place-items-center rounded-2xl text-xs font-bold transition shadow-sm ${
-                      isCurrent
+                      isFinished
+                        ? "bg-leaf text-white shadow-sm shadow-leaf/20 scale-105"
+                        : isCurrent
                         ? "bg-roast text-white ring-4 ring-roast/20 scale-105"
-                        : isPast
-                        ? "bg-leaf text-white"
                         : "bg-cream text-muted border border-line"
                     }`}
                   >
-                    {isPast ? <CheckCircle2 className="h-5 w-5" /> : idx + 1}
+                    {isFinished ? <CheckCircle2 className="h-5 w-5" /> : idx + 1}
                   </div>
                   <span
                     className={`mt-2 text-xs font-semibold leading-tight ${
-                      isCurrent ? "text-roast font-bold" : isPast ? "text-ink" : "text-muted"
+                      isFinished ? "text-leaf font-bold" : isCurrent ? "text-roast font-bold" : "text-muted"
                     }`}
                   >
                     {STATUS_LABEL[stage]}
@@ -495,9 +635,17 @@ export function OrderTrackingPage() {
                 <Thermometer className="h-3 w-3 text-roast" /> Roaster Chamber
               </span>
               <span className="display text-base sm:text-lg font-bold text-ink mt-0.5 block">
-                {order.status === "PREPARING" ? "195°C Charcoal" : order.status === "READY" ? "65°C Warmer" : "Ambient Ready"}
+                {isCompleted
+                  ? "Delivered & Rested"
+                  : order.status === "OUT_FOR_DELIVERY"
+                  ? "60°C Insulated Carrier"
+                  : order.status === "PREPARING"
+                  ? "195°C Charcoal"
+                  : order.status === "READY"
+                  ? "65°C Warmer"
+                  : "Ambient Ready"}
               </span>
-              <span className="text-[10px] text-muted">Charcoal Ember Pit</span>
+              <span className="text-[10px] text-muted">{isCompleted ? "Feast Concluded" : "Charcoal Ember Pit"}</span>
             </div>
 
             <div className="rounded-2xl bg-paper border border-line p-3">
@@ -505,9 +653,17 @@ export function OrderTrackingPage() {
                 <Activity className="h-3 w-3 text-leaf" /> Roaster Spin
               </span>
               <span className="display text-base sm:text-lg font-bold text-ink mt-0.5 block">
-                {order.status === "PREPARING" ? "12 RPM Active" : order.status === "READY" ? "Resting" : "Queueing"}
+                {isCompleted
+                  ? "Concluded"
+                  : order.status === "OUT_FOR_DELIVERY"
+                  ? "En Route (Roadway)"
+                  : order.status === "PREPARING"
+                  ? "12 RPM Active"
+                  : order.status === "READY"
+                  ? "Resting"
+                  : "Queueing"}
               </span>
-              <span className="text-[10px] text-muted">Bamboo Rotisserie</span>
+              <span className="text-[10px] text-muted">{isCompleted ? "Fulfillment Complete" : "Bamboo Rotisserie"}</span>
             </div>
 
             <div className="rounded-2xl bg-paper border border-line p-3">
@@ -525,9 +681,9 @@ export function OrderTrackingPage() {
                 <Clock className="h-3 w-3 text-sky-500" /> Target Fulfillment
               </span>
               <span className="display text-base sm:text-lg font-bold text-ink mt-0.5 block">
-                {formatTime(order.scheduledAt)}
+                {isCompleted ? formatTime(order.updatedAt || order.scheduledAt) : formatTime(order.scheduledAt)}
               </span>
-              <span className="text-[10px] text-muted">{isDelivery ? "Doorstep Delivery" : "Counter Pickup"}</span>
+              <span className="text-[10px] text-muted">{isCompleted ? "Delivered & Concluded" : isDelivery ? "Doorstep Delivery" : "Counter Pickup"}</span>
             </div>
           </div>
         </Card>

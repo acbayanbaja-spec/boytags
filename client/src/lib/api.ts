@@ -206,6 +206,14 @@ function handleFallback<T>(path: string, options: RequestInit = {}): T {
     const id = path.split("/")[3];
     return mockBackend.updateOrderStatus(id, body.status as OrderStatus) as unknown as T;
   }
+  if (path.match(/\/api\/orders\/[^/]+\/complete$/) && method === "POST") {
+    const id = path.split("/")[3];
+    return mockBackend.updateOrderStatus(id, "COMPLETED") as unknown as T;
+  }
+  if (path.match(/\/api\/orders\/[^/]+\/rider-arrived$/) && method === "POST") {
+    const id = path.split("/")[3];
+    return mockBackend.notifyRiderArrived(id) as unknown as T;
+  }
   if (path.match(/\/api\/orders\/[^/]+\/cancel$/) && method === "POST") {
     const id = path.split("/")[3];
     return mockBackend.cancelOrder(id, body.reason) as unknown as T;
