@@ -62,5 +62,25 @@ export function scheduleLabel(value: string | Date, status?: string) {
   return `${formatTime(date)} (${formatDeliveryDateLabel(date)})`;
 }
 
+export const STORE_OPEN = "08:30";
+export const STORE_CLOSE = "20:30";
+
+export function formatDateLong(value: string | Date) {
+  return new Date(value).toLocaleDateString("en-PH", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+export function countdownLabel(target: string | Date) {
+  const diffMs = new Date(target).getTime() - Date.now();
+  const abs = Math.abs(diffMs);
+  const mins = Math.floor(abs / 60000);
+  const secs = Math.floor((abs % 60000) / 1000);
+  const core = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : mins >= 1 ? `${mins}m ${secs}s` : `${secs}s`;
+  return diffMs >= 0 ? `in ${core}` : `${core} overdue`;
+}
+
 export const reducedMotion =
   typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;

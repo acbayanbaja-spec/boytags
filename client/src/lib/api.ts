@@ -27,68 +27,95 @@ export function clearSession() {
   sessionStorage.removeItem("boytags.refresh");
 }
 
-let isBackendReachable = true;
-let isSimulating = false;
+export type ConnectionStatus = "unknown" | "live" | "offline";
+
+let connectionStatus: ConnectionStatus = "unknown";
 let lastFailureTime = 0;
+let livenessTimer: ReturnType<typeof setTimeout> | null = null;
 const RETRY_INTERVAL_MS = 25000;
 
-type SimulationListener = (isSimulating: boolean) => void;
-const simulationListeners = new Set<SimulationListener>();
+type ConnectionListener = (status: ConnectionStatus) => void;
+const connectionListeners = new Set<ConnectionListener>();
 
-function setSimulationActive(active: boolean) {
-  if (isSimulating !== active) {
-    isSimulating = active;
-    simulationListeners.forEach((fn) => fn(active));
+function setConnectionStatus(status: ConnectionStatus) {
+  if (connectionStatus !== status) {
+    connectionStatus = status;
+    connectionListeners.forEach((fn) => fn(status));
   }
 }
 
-export function isSimulationMode(): boolean {
-  return isSimulating;
+export function getConnectionStatus(): ConnectionStatus {
+  return connectionStatus;
 }
 
-export function subscribeSimulationMode(listener: SimulationListener): () => void {
-  simulationListeners.add(listener);
-  listener(isSimulating);
+export function subscribeConnectionStatus(listener: ConnectionListener): () => void {
+  connectionListeners.add(listener);
+  listener(connectionStatus);
   return () => {
-    simulationListeners.delete(listener);
+    connectionListeners.delete(listener);
   };
 }
 
-export function useSimulationMode(): boolean {
-  const [simulating, setSimulating] = useState(isSimulationMode());
-  useEffect(() => {
-    return subscribeSimulationMode(setSimulating);
-  }, []);
-  return simulating;
+export function useConnectionStatus(): ConnectionStatus {
+  const [status, setStatus] = useState(connectionStatus);
+  useEffect(() => subscribeConnectionStatus(setStatus), []);
+  return status;
 }
 
-// Fast background health check
+/** Endpoints whose responses must come from the real backend — fake data here would silently
+ *  disconnect customers from the kitchen (orders, auth, live queue). */
+function requiresRealBackend(path: string, _method: string): boolean {
+  if (path.startsWith("/api/auth/forgot-password") || path.startsWith("/api/auth/reset-password")) return false;
+  return path.startsWith("/api/orders") || path.startsWith("/api/auth");
+}
+
+function backendDownError(): Error {
+  return new Error(
+    "Not connected to the Boytag's kitchen server, so this action was NOT saved. Check your connection and try again.",
+  );
+}
+
+/** Only schedule one probe at a time so failures can't cascade into fetch storms. */
 function scheduleLivenessCheck() {
-  setTimeout(async () => {
+  if (livenessTimer) return;
+  livenessTimer = setTimeout(async () => {
+    livenessTimer = null;
     try {
       const c = new AbortController();
-      const t = setTimeout(() => c.abort(), 800);
+      const t = setTimeout(() => c.abort(), 1500);
       const res = await fetch(`${API_URL}/health`, { signal: c.signal });
       clearTimeout(t);
-      if (res.ok) {
-        isBackendReachable = true;
-        setSimulationActive(false);
+      const contentType = res.headers.get("content-type") || "";
+      if (res.ok && contentType.includes("json")) {
+        const body = (await res.json().catch(() => null)) as { ok?: boolean } | null;
+        if (body?.ok) {
+          setConnectionStatus("live");
+          return;
+        }
       }
+      setConnectionStatus("offline");
+      scheduleLivenessCheck();
     } catch {
-      isBackendReachable = false;
+      setConnectionStatus("offline");
+      scheduleLivenessCheck();
     }
   }, RETRY_INTERVAL_MS);
 }
 
 /**
- * High-performance, zero-hang API dispatcher:
- * 1. If backend previously failed within 25 seconds, instantly returns local store in 0ms.
- * 2. Uses a strict 1000ms timeout so the UI never freezes or hangs.
- * 3. Gracefully and instantly falls back to reactive local simulation store.
+ * Honest API dispatcher:
+ * 1. Real backend responses (strict JSON envelope) win — connection flips to "live".
+ * 2. Order & auth endpoints NEVER fabricate fake data; if the backend is down they throw
+ *    a clear error so customers and the kitchen stay connected to the same truth.
+ * 3. Browsing endpoints (products/categories) may fall back to the local demo store so the
+ *   menu stays visible offline.
  */
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const now = Date.now();
-  if (!isBackendReachable && now - lastFailureTime < RETRY_INTERVAL_MS) {
+  const method = (options.method || "GET").toUpperCase();
+  const realBackendOnly = requiresRealBackend(path, method);
+  if (connectionStatus === "offline" && now - lastFailureTime < RETRY_INTERVAL_MS) {
+    if (realBackendOnly) throw backendDownError();
     return handleFallback<T>(path, options);
   }
 
@@ -100,7 +127,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   if (access) headers.set("Authorization", `Bearer ${access}`);
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 1200);
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
 
   try {
     const response = await fetch(`${API_URL}${path}`, {
@@ -110,38 +137,61 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     });
     clearTimeout(timeoutId);
 
-    if (response.ok) {
-      isBackendReachable = true;
-      setSimulationActive(false);
+    const contentType = response.headers.get("content-type") || "";
+    const isJson = contentType.includes("json");
+
+    if (response.ok && isJson) {
+      setConnectionStatus("live");
       const json = (await response.json().catch(() => null)) as Envelope<T> | null;
       if (json && json.success !== false && "data" in json) {
         return json.data;
       }
     }
 
-    if (response.status === 404 || response.status === 502 || response.status === 503) {
-      isBackendReachable = false;
+    if (isJson && !response.ok) {
+      // Real backend answered with a real business error — surface it, do not fake success.
+      const errJson = (await response.json().catch(() => null)) as Envelope<T> | null;
+      if (errJson && "error" in errJson) {
+        throw new Error(errJson.error.message);
+      }
+    }
+
+    // Non-JSON (e.g. SPA HTML from a misrouted rewrite), 404/502/503, or empty envelope:
+    // the backend is not answering on this URL.
+    if (!response.ok || !isJson) {
+      setConnectionStatus("offline");
       lastFailureTime = Date.now();
       scheduleLivenessCheck();
+      if (realBackendOnly) throw backendDownError();
       return handleFallback<T>(path, options);
     }
 
-    const errJson = (await response.json().catch(() => null)) as Envelope<T> | null;
-    if (errJson && "error" in errJson) {
-      throw new Error(errJson.error.message);
-    }
+    if (realBackendOnly) throw backendDownError();
     return handleFallback<T>(path, options);
   } catch (err: unknown) {
     clearTimeout(timeoutId);
-    isBackendReachable = false;
-    lastFailureTime = Date.now();
-    scheduleLivenessCheck();
+    if (err instanceof Error && err.message === backendDownError().message) throw err;
+    if (err instanceof Error && err.name === "AbortError") {
+      setConnectionStatus("offline");
+      lastFailureTime = Date.now();
+      scheduleLivenessCheck();
+    } else if (err instanceof TypeError) {
+      // network failure
+      setConnectionStatus("offline");
+      lastFailureTime = Date.now();
+      scheduleLivenessCheck();
+    } else {
+      // Genuine business error from the live backend.
+      setConnectionStatus("live");
+      throw err;
+    }
+    if (realBackendOnly) throw backendDownError();
     return handleFallback<T>(path, options);
   }
 }
 
 function handleFallback<T>(path: string, options: RequestInit = {}): T {
-  setSimulationActive(true);
+  setConnectionStatus("offline");
   const method = (options.method || "GET").toUpperCase();
   const body = options.body ? (typeof options.body === "string" ? JSON.parse(options.body) : options.body) : {};
 

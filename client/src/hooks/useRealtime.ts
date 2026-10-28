@@ -27,6 +27,12 @@ export function useRealtime() {
           description: `Rider has arrived with Order ${event.orderNumber || ""} at your gate! Please meet your rider.`,
         });
       }
+      if (event.type === "order-expired") {
+        sound.play("alert");
+        toast.error(`Order ${event.orderNumber || ""} auto-expired`, {
+          description: "Its scheduled time passed without fulfilment, so it was cancelled and left the queue.",
+        });
+      }
       void queryClient.invalidateQueries({ queryKey: ["orders"] });
       void queryClient.invalidateQueries({ queryKey: ["order"] });
       void queryClient.invalidateQueries({ queryKey: ["notifications"] });
@@ -61,7 +67,14 @@ export function useRealtime() {
             });
           }
 
-          if (payload.type === "order" || payload.type === "order-completed" || payload.type === "staff-event") {
+          if (payload.type === "order-expired") {
+            sound.play("alert");
+            toast.error(`Order ${payload.orderNumber || ""} auto-expired`, {
+              description: "Its scheduled time passed without fulfilment, so it was cancelled and left the queue.",
+            });
+          }
+
+          if (payload.type === "order" || payload.type === "order-completed" || payload.type === "order-expired" || payload.type === "staff-event") {
             void queryClient.invalidateQueries({ queryKey: ["orders"] });
             void queryClient.invalidateQueries({ queryKey: ["order"] });
             void queryClient.invalidateQueries({ queryKey: ["queue"] });

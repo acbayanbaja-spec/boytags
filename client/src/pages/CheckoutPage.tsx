@@ -3,7 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import { api } from "@/lib/api";
-import { formatPeso } from "@/lib/utils";
+import { formatPeso, formatDateLong, STORE_OPEN, STORE_CLOSE } from "@/lib/utils";
 import { sound } from "@/lib/sound";
 import { LocationPicker, TUPI_BOYTAGS_COORDS } from "@/components/MapPin";
 import { Button, Card, Field, inputClass, Modal } from "@/components/ui";
@@ -25,6 +25,24 @@ import {
 import type { Order, OrderType } from "@/types";
 import { toast } from "sonner";
 
+const AUTO_CANCEL_GRACE_MINUTES = 15;
+
+function toDateInputValue(d: Date) {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function combineDateTime(dateStr: string, timeStr: string) {
+  return new Date(`${dateStr}T${timeStr || "00:00"}:00`);
+}
+
+function minutesOf(timeStr: string) {
+  const [h, m] = timeStr.split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
 export function CheckoutPage() {
   const { user } = useAuth();
   const { items, subtotal, clear } = useCart();
@@ -32,7 +50,8 @@ export function CheckoutPage() {
 
   const [orderType, setOrderType] = useState<OrderType>("DELIVERY");
   const [scheduleMode, setScheduleMode] = useState<"asap" | "custom">("asap");
-  const [customTime, setCustomTime] = useState<string>("");
+  const [customDate, setCustomDate] = useState<string>("");
+  const [customClock, setCustomClock] = useState<string>("");
   const [customerNotes, setCustomerNotes] = useState<string>("");
 
   // Delivery fields with Tupi, South Cotabato defaults
@@ -62,16 +81,25 @@ export function CheckoutPage() {
     }
   }, [items, navigate]);
 
-  // Set default custom time to 1 hour from now
+  // Default scheduled slot: tomorrow morning (today's remaining slots are the quick chips)
   useEffect(() => {
-    const d = new Date(Date.now() + 60 * 60 * 1000);
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
-    const hh = String(d.getHours()).padStart(2, "0");
-    const min = String(d.getMinutes()).padStart(2, "0");
-    setCustomTime(`${yyyy}-${mm}-${dd}T${hh}:${min}`);
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    setCustomDate(toDateInputValue(d));
+    setCustomClock("10:00");
   }, []);
+
+  const todayStr = toDateInputValue(new Date());
+  const maxDateStr = toDateInputValue(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
+  const asapTarget = new Date(Date.now() + 25 * 60 * 1000);
+  const chosenTarget = customDate ? combineDateTime(customDate, customClock) : null;
+  const chosenValid =
+    Boolean(chosenTarget) &&
+    !Number.isNaN(chosenTarget!.getTime()) &&
+    chosenTarget!.getTime() >= Date.now() - 60000 &&
+    minutesOf(customClock) >= minutesOf(STORE_OPEN) &&
+    minutesOf(customClock) <= minutesOf(STORE_CLOSE);
+  const previewTarget = scheduleMode === "asap" ? asapTarget : chosenValid ? chosenTarget : null;
 
   async function handlePlaceOrder(e: React.FormEvent) {
     e.preventDefault();
@@ -93,13 +121,26 @@ export function CheckoutPage() {
       // 25 mins from now
       scheduledAt = new Date(Date.now() + 25 * 60 * 1000).toISOString();
     } else {
-      if (!customTime) {
-        setError("Please choose your desired pickup or delivery time.");
+      if (!customDate || !customClock) {
+        setError("Please choose your desired date and time.");
         return;
       }
-      const chosen = new Date(customTime);
-      if (Number.isNaN(chosen.getTime()) || chosen.getTime() < Date.now() - 60000) {
+      const chosen = combineDateTime(customDate, customClock);
+      if (Number.isNaN(chosen.getTime())) {
+        setError("Please choose a valid date and time.");
+        return;
+      }
+      if (chosen.getTime() < Date.now() - 60000) {
         setError("Please select a future date and time for your schedule.");
+        return;
+      }
+      if (chosen.getTime() > Date.now() + 7 * 24 * 60 * 60 * 1000) {
+        setError("Orders can only be scheduled up to 7 days ahead.");
+        return;
+      }
+      const mins = minutesOf(customClock);
+      if (mins < minutesOf(STORE_OPEN) || mins > minutesOf(STORE_CLOSE)) {
+        setError(`The roaster fires from ${STORE_OPEN} to ${STORE_CLOSE} — pick a time within store hours.`);
         return;
       }
       scheduledAt = chosen.toISOString();
@@ -261,7 +302,7 @@ export function CheckoutPage() {
                 }`}
               >
                 <p className="font-bold">As Soon As Possible</p>
-                <p className="text-[11px] text-muted mt-0.5">Freshly prepared in ~20–30 mins</p>
+                <p className="text-[11px] text-muted mt-0.5">Freshly roasted in ~20–30 mins</p>
               </button>
 
               <button
@@ -276,22 +317,105 @@ export function CheckoutPage() {
                     : "border-line bg-paper text-ink"
                 }`}
               >
-                <p className="font-bold">Schedule for Later</p>
-                <p className="text-[11px] text-muted mt-0.5">Choose target time today</p>
+                <p className="font-bold">Pick Date &amp; Time</p>
+                <p className="text-[11px] text-muted mt-0.5">Schedule up to 7 days ahead</p>
               </button>
             </div>
 
             {scheduleMode === "custom" && (
-              <Field label="Choose scheduled pickup or delivery time">
-                <input
-                  type="datetime-local"
-                  required
-                  value={customTime}
-                  onChange={(e) => setCustomTime(e.target.value)}
-                  className={inputClass()}
-                />
-              </Field>
+              <div className="space-y-4">
+                {/* One-tap quick slots */}
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { label: "Lunch 12:00 NN", dayOffset: 0, time: "12:00" },
+                    { label: "Merienda 3:30 PM", dayOffset: 0, time: "15:30" },
+                    { label: "Dinner 6:00 PM", dayOffset: 0, time: "18:00" },
+                    { label: "Tomorrow 10:00 AM", dayOffset: 1, time: "10:00" },
+                  ].map((chip) => {
+                    const d = new Date();
+                    d.setDate(d.getDate() + chip.dayOffset);
+                    const dateStr = toDateInputValue(d);
+                    const active = customDate === dateStr && customClock === chip.time;
+                    return (
+                      <button
+                        key={chip.label}
+                        type="button"
+                        onClick={() => {
+                          sound.play("click");
+                          setCustomDate(dateStr);
+                          setCustomClock(chip.time);
+                        }}
+                        className={`rounded-full border px-3 py-1 text-[11px] font-bold transition ${
+                          active
+                            ? "border-roast bg-roast text-white shadow-sm"
+                            : "border-line bg-cream text-ink hover:border-roast/50 hover:text-roast"
+                        }`}
+                      >
+                        {chip.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Delivery / pickup date">
+                    <input
+                      type="date"
+                      required
+                      value={customDate}
+                      min={todayStr}
+                      max={maxDateStr}
+                      onChange={(e) => setCustomDate(e.target.value)}
+                      className={inputClass()}
+                    />
+                  </Field>
+                  <Field label="Time (store fires 8:30 AM – 8:30 PM)">
+                    <input
+                      type="time"
+                      required
+                      value={customClock}
+                      min={STORE_OPEN}
+                      max={STORE_CLOSE}
+                      onChange={(e) => setCustomClock(e.target.value)}
+                      className={inputClass()}
+                    />
+                  </Field>
+                </div>
+              </div>
             )}
+
+            {/* Live target-time preview */}
+            <div
+              className={`rounded-2xl border p-3.5 text-xs ${
+                previewTarget
+                  ? "border-roast/25 bg-gradient-to-r from-amber-50 to-orange-50/60"
+                  : "border-line bg-cream/60"
+              }`}
+            >
+              {previewTarget ? (
+                <>
+                  <p className="font-bold uppercase tracking-wider text-[10px] text-amber-900">
+                    {orderType === "DELIVERY" ? "Delivering to you" : "Ready for pickup"}
+                  </p>
+                  <p className="text-sm font-extrabold text-ink mt-0.5">
+                    {formatDateLong(previewTarget)} ·{" "}
+                    <span className="text-roast">
+                      {previewTarget.toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" })}
+                    </span>
+                  </p>
+                  <p className="text-[11px] text-amber-900/80 mt-1">
+                    {scheduleMode === "asap"
+                      ? `Target ${orderType === "DELIVERY" ? "delivery" : "pickup"} window: about 20–30 minutes from now.`
+                      : "Your roaster is pre-heated to hit this exact slot."}{" "}
+                    Orders unconfirmed past their time auto-cancel in {AUTO_CANCEL_GRACE_MINUTES} mins.
+                  </p>
+                </>
+              ) : (
+                <p className="text-muted font-semibold">
+                  Choose a future date and a time within store hours (8:30 AM – 8:30 PM) to see your target slot.
+                </p>
+              )}
+            </div>
           </Card>
 
           {/* 3. Delivery Pinpoint & Address (Only if Delivery) */}

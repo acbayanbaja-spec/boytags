@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../config/db.js";
 import { AppError } from "../utils/http.js";
 import { computePriority } from "../utils/orderNumber.js";
@@ -129,8 +130,100 @@ export async function processUnclaimedOrders() {
   return { scanned: candidates.length, marked };
 }
 
+/**
+ * Auto-expire sweep: orders whose scheduled time passed without being fulfilled
+ * (and without kitchen confirmation while still PENDING) are cancelled, restocked,
+ * and removed from every live view so the queue only ever shows work that can happen.
+ */
+export async function processExpiredOrders() {
+  const settings = await prisma.setting.findUnique({ where: { id: "default" } });
+  const graceMs = (settings?.autoCancelGraceMinutes ?? 15) * 60 * 1000;
+  const now = new Date();
+  const overdueCutoff = new Date(now.getTime() - graceMs);
+
+  const candidates = await prisma.order.findMany({
+    where: {
+      status: { in: ["PENDING", "CONFIRMED", "PREPARING"] },
+      OR: [
+        { autoCancelAt: { not: null, lte: now } },
+        { autoCancelAt: null, scheduledAt: { lte: overdueCutoff } },
+      ],
+    },
+    include: { items: true, customer: true },
+  });
+
+  let expired = 0;
+  for (const order of candidates) {
+    const reason = `Auto-expired: the ${order.type === "DELIVERY" ? "delivery" : "pickup"} time passed and the order was never fulfilled.`;
+    await prisma.$transaction(async (tx) => {
+      for (const item of order.items) {
+        await tx.product.update({
+          where: { id: item.productId },
+          data: { availableQty: { increment: item.quantity }, soldOut: false },
+        });
+      }
+      await tx.order.update({
+        where: { id: order.id },
+        data: { status: "CANCELLED", cancelReason: reason, priority: "NORMAL", autoCancelAt: null },
+      });
+      await tx.orderHistory.create({
+        data: {
+          orderId: order.id,
+          actorRole: "SYSTEM",
+          actorName: "Expiry watcher",
+          action: "AUTO_EXPIRED",
+          previousValue: { status: order.status },
+          newValue: { status: "CANCELLED", reason },
+        },
+      });
+      const existing = await tx.alert.findFirst({
+        where: { orderId: order.id, type: "UNCLAIMED_ORDER", status: { in: ["OPEN", "ACKNOWLEDGED"] } },
+      });
+      if (!existing) {
+        await tx.alert.create({
+          data: { type: "UNCLAIMED_ORDER", message: `Expired order ${order.orderNumber} auto-cancelled.`, orderId: order.id },
+        });
+      }
+    });
+
+    await notifyUser({
+      userId: order.customerId,
+      type: "AUTO_EXPIRED",
+      title: `Order ${order.orderNumber} expired`,
+      body: `Its ${order.type === "DELIVERY" ? "delivery" : "pickup"} time passed without fulfilment, so it was automatically cancelled and removed from the queue. Stock has been returned.`,
+      orderId: order.id,
+    });
+    await notifyStaff({
+      type: "AUTO_EXPIRED",
+      title: `Order ${order.orderNumber} auto-expired`,
+      body: `Unfulfilled past its scheduled time — cancelled and restocked automatically.`,
+      orderId: order.id,
+    });
+    realtime.broadcast({
+      type: "order-expired",
+      audience: "all",
+      orderId: order.id,
+      userId: order.customerId,
+      orderNumber: order.orderNumber,
+      status: "CANCELLED",
+    });
+    realtime.broadcast({ type: "inventory", audience: "all" });
+    expired += 1;
+    logger.info("Auto-expired order", { orderNumber: order.orderNumber });
+  }
+
+  return { scanned: candidates.length, expired };
+}
+
 export function startUnclaimedJob(intervalMs) {
-  const run = () => processUnclaimedOrders().catch((error) => logger.error("Unclaimed job failed", { message: error.message }));
+  const run = async () => {
+    try {
+      await processExpiredOrders();
+    } catch (error) {
+      logger.error("Expiry job failed", { message: error.message });
+    }
+    processUnclaimedOrders().catch((error) => logger.error("Unclaimed job failed", { message: error.message }));
+  };
   run();
   return setInterval(run, intervalMs);
 }

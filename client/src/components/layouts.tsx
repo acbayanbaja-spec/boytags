@@ -23,10 +23,37 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import { useRealtime } from "@/hooks/useRealtime";
-import { api } from "@/lib/api";
+import { api, useConnectionStatus } from "@/lib/api";
 import { cn, formatTime } from "@/lib/utils";
 import { Button, SoundToggle } from "@/components/ui";
 import type { Order } from "@/types";
+
+function ConnectionPill() {
+  const status = useConnectionStatus();
+  if (status === "live") {
+    return (
+      <span
+        className="hidden lg:inline-flex items-center gap-1.5 rounded-full border border-leaf/30 bg-leaf-soft px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-leaf"
+        title="Connected to the live Boytag's kitchen server"
+      >
+        <span className="h-1.5 w-1.5 rounded-full bg-leaf" />
+        Kitchen Live
+      </span>
+    );
+  }
+  if (status === "offline") {
+    return (
+      <span
+        className="hidden lg:inline-flex items-center gap-1.5 rounded-full border border-danger/40 bg-rose-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-danger"
+        title="Cannot reach the kitchen server — orders will not be saved until this clears"
+      >
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-danger" />
+        Not Connected
+      </span>
+    );
+  }
+  return null;
+}
 
 export function Brand({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
   return (
@@ -140,6 +167,7 @@ export function StoreShell() {
 
             {/* Action Buttons */}
             <div className="flex items-center gap-2">
+              <ConnectionPill />
               <SoundToggle />
 
               {/* Notifications: only for logged in users */}

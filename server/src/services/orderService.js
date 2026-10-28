@@ -15,6 +15,17 @@ function money(value) {
   return Number(value);
 }
 
+const DEFAULT_AUTO_CANCEL_GRACE_MINUTES = 15;
+const MAX_SCHEDULE_AHEAD_MS = 7 * 24 * 60 * 60 * 1000;
+
+function graceMinutes(settings) {
+  return settings?.autoCancelGraceMinutes ?? DEFAULT_AUTO_CANCEL_GRACE_MINUTES;
+}
+
+function autoCancelDeadline(scheduledAt, settings) {
+  return new Date(new Date(scheduledAt).getTime() + graceMinutes(settings) * 60 * 1000);
+}
+
 function serializeOrder(order) {
   const priority = computePriority(order);
   return {
@@ -134,11 +145,28 @@ async function hydrateItems(tx, items) {
   });
 }
 
+function orderIncludes() {
+  return {
+    items: {
+      include: {
+        product: {
+          select: { imageUrl: true, slug: true, name: true, description: true, active: true, soldOut: true, availableQty: true },
+        },
+      },
+    },
+    delivery: true,
+    customer: { select: { id: true, name: true, email: true, phone: true } },
+  };
+}
+
 export async function createOrder(customer, input) {
   const settings = await prisma.setting.findUnique({ where: { id: "default" } });
   const scheduledAt = new Date(input.scheduledAt);
   if (Number.isNaN(scheduledAt.getTime()) || scheduledAt < new Date(Date.now() - 60000)) {
     throw new AppError("Choose a valid future pickup or delivery time.", 422, "INVALID_SCHEDULE");
+  }
+  if (scheduledAt.getTime() > Date.now() + MAX_SCHEDULE_AHEAD_MS) {
+    throw new AppError("Orders can only be scheduled up to 7 days ahead.", 422, "INVALID_SCHEDULE");
   }
 
   const order = await prisma.$transaction(async (tx) => {
@@ -153,6 +181,7 @@ export async function createOrder(customer, input) {
         type: input.type,
         status: "PENDING",
         scheduledAt,
+        autoCancelAt: autoCancelDeadline(scheduledAt, settings),
         subtotal,
         deliveryFee,
         total: subtotal + deliveryFee,
@@ -203,12 +232,7 @@ export async function createOrder(customer, input) {
 export async function getOrder(id, actor) {
   const order = await prisma.order.findUnique({
     where: { id },
-    include: {
-      items: { include: { product: true } },
-      delivery: true,
-      customer: { select: { id: true, name: true, email: true, phone: true } },
-      history: { orderBy: { createdAt: "asc" } },
-    },
+    include: { ...orderIncludes(), history: { orderBy: { createdAt: "asc" } } },
   });
   if (!order) throw new AppError("Order not found.", 404, "NOT_FOUND");
   if (actor.role === "CUSTOMER" && order.customerId !== actor.sub) {
@@ -236,11 +260,7 @@ export async function listOrders(actor, query = {}) {
   }
   const orders = await prisma.order.findMany({
     where,
-    include: {
-      items: true,
-      delivery: true,
-      customer: { select: { id: true, name: true, email: true, phone: true } },
-    },
+    include: orderIncludes(),
     orderBy: [{ scheduledAt: "asc" }, { createdAt: "desc" }],
     take: Number(query.limit) || 100,
   });
@@ -250,11 +270,7 @@ export async function listOrders(actor, query = {}) {
 export async function queueOrders() {
   const orders = await prisma.order.findMany({
     where: { status: { in: ACTIVE_QUEUE_STATUSES } },
-    include: {
-      items: true,
-      delivery: true,
-      customer: { select: { id: true, name: true, email: true, phone: true } },
-    },
+    include: orderIncludes(),
   });
   const now = Date.now();
   return orders
@@ -277,7 +293,11 @@ export async function updateStatus(id, status, actor) {
   assertTransition(current.status, status, { type: current.type, actorRole: actor.role });
 
   const updated = await prisma.$transaction(async (tx) => {
-    const data = { status, priority: computePriority({ ...current, status }) };
+    const data = {
+      status,
+      priority: computePriority({ ...current, status }),
+      autoCancelAt: status === "CONFIRMED" ? null : undefined,
+    };
     const next = await tx.order.update({ where: { id }, data, include: { items: true, delivery: true, customer: true } });
     await recordHistory(tx, {
       orderId: id,
@@ -532,6 +552,10 @@ export async function updateOrder(id, actor, input) {
       where: { id },
       data: {
         scheduledAt: input.scheduledAt ? new Date(input.scheduledAt) : undefined,
+        autoCancelAt:
+          input.scheduledAt && current.status === "PENDING"
+            ? autoCancelDeadline(input.scheduledAt, settings)
+            : undefined,
         customerNotes: input.customerNotes === undefined ? undefined : input.customerNotes,
         subtotal,
         deliveryFee,

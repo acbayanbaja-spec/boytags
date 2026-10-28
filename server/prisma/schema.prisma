@@ -107,6 +107,7 @@ model Order {
   status         OrderStatus      @default(PENDING)
   priority       Priority         @default(NORMAL)
   scheduledAt    DateTime
+  autoCancelAt   DateTime?
   subtotal       Decimal          @db.Decimal(10, 2)
   deliveryFee    Decimal          @default(0) @db.Decimal(10, 2)
   total          Decimal          @db.Decimal(10, 2)
@@ -122,6 +123,7 @@ model Order {
   alerts         Alert[]
 
   @@index([status, scheduledAt])
+  @@index([status, autoCancelAt])
   @@index([customerId, createdAt])
   @@index([type, status])
 }
@@ -209,6 +211,7 @@ model Setting {
   latitude                    Decimal @db.Decimal(10, 7)
   longitude                   Decimal @db.Decimal(10, 7)
   unclaimedThresholdMinutes   Int     @default(20)
+  autoCancelGraceMinutes      Int     @default(15)
   deliveryFee                 Decimal @default(40) @db.Decimal(10, 2)
   lowStockThreshold           Int     @default(5)
   openingTime                 String  @default("09:00")

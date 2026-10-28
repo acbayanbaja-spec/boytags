@@ -6,11 +6,11 @@ const images = {
   spicy: "/images/spicy-labuyo-lechon-manok.jpg",
   bilao: "/images/barkada-fiesta-roast-bilao.jpg",
   inasal: "/images/chicken-inasal.jpg",
-  fried: "https://images.unsplash.com/photo-1626645738196-c2a7c87a8f58?auto=format&fit=crop&w=1200&q=80",
+  fried: "https://images.unsplash.com/photo-1626645738196-c2a7c87a8f58?auto=format&fit=crop&w=800&q=70",
   liempo: "/images/grilled-liempo.jpg",
-  rice: "https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&w=1200&q=80",
-  drinks: "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=1200&q=80",
-  sauce: "https://images.unsplash.com/photo-1472476443507-c7a5948772fc?auto=format&fit=crop&w=1200&q=80",
+  rice: "https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&w=800&q=70",
+  drinks: "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=800&q=70",
+  sauce: "https://images.unsplash.com/photo-1472476443507-c7a5948772fc?auto=format&fit=crop&w=800&q=70",
 };
 
 export const INITIAL_USERS: User[] = [
@@ -203,7 +203,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     slug: "crispy-lechon-porchetta-roll",
     description: "Slow-roasted pork belly roll with ultra-crispy crackling skin, stuffed with native lemongrass, garlic cloves, and scallions. 1kg slice.",
     price: 580,
-    imageUrl: "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=1200&q=80",
+    imageUrl: "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=800&q=70",
     availableQty: 15,
     soldOut: false,
     active: true,
@@ -216,7 +216,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     slug: "poblacion-sizzling-chicken-sisig",
     description: "Chopped crispy roast chicken tossed with savory chicken liver glaze, calamansi, native onions, and fiery Mindanao sili labuyo.",
     price: 245,
-    imageUrl: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=1200&q=80",
+    imageUrl: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=800&q=70",
     availableQty: 25,
     soldOut: false,
     active: true,
@@ -241,7 +241,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     slug: "crispy-kangkong-garlic-dip",
     description: "Fresh local river spinach flash-fried in golden tempura batter with toasted garlic bits and house spicy garlic-mayo sawsawan.",
     price: 120,
-    imageUrl: "https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=1200&q=80",
+    imageUrl: "https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=800&q=70",
     availableQty: 35,
     soldOut: false,
     active: true,
@@ -253,7 +253,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     slug: "lemongrass-calamansi-quencher-1l",
     description: "Freshly brewed wild tanglad (lemongrass) tea infused with pure Tupi calamansi juice and wild Mindanao honey over crushed ice. Serves 3–4.",
     price: 95,
-    imageUrl: "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=1200&q=80",
+    imageUrl: "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=800&q=70",
     availableQty: 40,
     soldOut: false,
     active: true,
@@ -497,6 +497,38 @@ class MockBackend {
 
   constructor() {
     this.load();
+    this.sweepExpired();
+    if (typeof window !== "undefined") {
+      setInterval(() => this.sweepExpired(), 30000);
+    }
+  }
+
+  /** Mirrors the server's expiry watcher: overdue unfulfilled orders auto-cancel and leave the queue. */
+  private sweepExpired() {
+    const now = Date.now();
+    let changed = false;
+    for (const order of this.orders) {
+      if (order.status !== "PENDING") continue;
+      const deadline = order.autoCancelAt
+        ? new Date(order.autoCancelAt).getTime()
+        : new Date(order.scheduledAt).getTime() + 15 * 60 * 1000;
+      if (Number.isNaN(deadline) || now < deadline) continue;
+      order.status = "CANCELLED";
+      order.cancelReason = "Auto-expired: the scheduled pickup or delivery time passed without confirmation.";
+      order.updatedAt = new Date().toISOString();
+      this.notifications.unshift({
+        id: `notif_${Date.now()}_exp`,
+        orderId: order.id,
+        type: "AUTO_EXPIRED",
+        title: `Order ${order.orderNumber} expired`,
+        body: "Its scheduled time passed without confirmation, so it was automatically cancelled and removed from the queue.",
+        read: false,
+        createdAt: new Date().toISOString(),
+      });
+      emitMockStore({ type: "order-expired", orderId: order.id, orderNumber: order.orderNumber, status: "CANCELLED" });
+      changed = true;
+    }
+    if (changed) this.save();
   }
 
   private load() {
@@ -669,14 +701,25 @@ class MockBackend {
     this.save();
   }
 
+  /** Attach live product info (photo etc.) to order items, mirroring the real API. */
+  private withProductData(order: Order): Order {
+    return {
+      ...order,
+      items: order.items.map((item) => {
+        const product = this.products.find((p) => p.id === item.productId);
+        return product ? { ...item, product: { imageUrl: product.imageUrl, slug: product.slug, name: product.name, description: product.description, availableQty: product.availableQty } } : item;
+      }),
+    };
+  }
+
   public getOrders(user?: User | null): Order[] {
     if (!user) {
       return [];
     }
     if (user.role === "STAFF" || user.role === "ADMIN") {
-      return this.orders;
+      return this.orders.map((o) => this.withProductData(o));
     }
-    return this.orders.filter((o) => o.customer?.id === user.id);
+    return this.orders.filter((o) => o.customer?.id === user.id).map((o) => this.withProductData(o));
   }
 
   public getQueueOrders(): Order[] {
@@ -736,6 +779,7 @@ class MockBackend {
       status: "PENDING",
       priority: "NORMAL",
       scheduledAt: payload.scheduledAt,
+      autoCancelAt: new Date(new Date(payload.scheduledAt).getTime() + 15 * 60 * 1000).toISOString(),
       subtotal,
       deliveryFee,
       total,
@@ -777,6 +821,7 @@ class MockBackend {
     const order = this.getOrder(id);
     const prevStatus = order.status;
     order.status = newStatus;
+    if (newStatus === "CONFIRMED") order.autoCancelAt = null;
     order.updatedAt = new Date().toISOString();
 
     const actor = this.currentUser || INITIAL_USERS[1];

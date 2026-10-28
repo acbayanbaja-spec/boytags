@@ -48,6 +48,7 @@ export type OrderItem = {
   unitPrice: number;
   quantity: number;
   lineTotal: number;
+  product?: { imageUrl?: string; slug?: string; name?: string; description?: string; availableQty?: number } | null;
 };
 
 export type Delivery = {
@@ -66,6 +67,7 @@ export type Order = {
   status: OrderStatus;
   priority: "NORMAL" | "HIGH" | "URGENT";
   scheduledAt: string;
+  autoCancelAt?: string | null;
   subtotal: number;
   deliveryFee: number;
   total: number;

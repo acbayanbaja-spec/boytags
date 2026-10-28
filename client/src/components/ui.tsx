@@ -296,36 +296,35 @@ export function SafeImage({
   fallbackSrc = "/images/whole-lechon-manok.jpg",
   ...props
 }: React.ImgHTMLAttributes<HTMLImageElement> & { fallbackSrc?: string }) {
-  const [imgSrc, setImgSrc] = useState(src || fallbackSrc);
+  const [failed, setFailed] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  const [isBroken, setIsBroken] = useState(false);
 
   useEffect(() => {
-    setImgSrc(src || fallbackSrc);
-    setIsBroken(false);
+    setFailed(false);
     setLoaded(false);
   }, [src, fallbackSrc]);
 
+  const imgSrc = failed ? fallbackSrc : src || fallbackSrc;
+
   return (
     <div className={cn("relative overflow-hidden bg-cream/70", className)}>
-      {!loaded && !isBroken && (
+      {!loaded && (
         <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-cream via-line/40 to-cream" />
       )}
       <img
-        src={isBroken ? fallbackSrc : imgSrc}
+        key={imgSrc}
+        src={imgSrc}
         alt={alt}
         loading="lazy"
         decoding="async"
         onLoad={() => setLoaded(true)}
         onError={() => {
-          if (!isBroken) {
-            setIsBroken(true);
-            setImgSrc(fallbackSrc);
-          }
+          if (!failed) setFailed(true);
+          else setLoaded(true);
         }}
         className={cn(
-          "h-full w-full object-cover transition-opacity duration-300",
-          loaded || isBroken ? "opacity-100" : "opacity-0",
+          "relative h-full w-full object-cover transition-opacity duration-300",
+          loaded ? "opacity-100" : "opacity-0",
         )}
         {...props}
       />
