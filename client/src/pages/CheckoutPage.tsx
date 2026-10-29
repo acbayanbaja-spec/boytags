@@ -79,7 +79,9 @@ export function CheckoutPage() {
 
   // Delivery fee is 40 for delivery, 0 for pickup
   const deliveryFee = orderType === "DELIVERY" ? 40 : 0;
-  const total = subtotal + deliveryFee + (orderType === "DELIVERY" ? riderTip : 0);
+  // The kitchen bills subtotal + delivery fee, so the tip stays out of the amount the customer
+  // transfers. Including it here made the receipt disagree with what checkout asked them to pay.
+  const total = subtotal + deliveryFee;
 
   useEffect(() => {
     if (items.length === 0) {
@@ -595,6 +597,7 @@ export function CheckoutPage() {
                     </button>
                   ))}
                 </div>
+                <p className="text-[11px] text-muted">Have this ready in cash for the rider — it is not added to your bill.</p>
               </div>
             </Card>
           )}
@@ -735,8 +738,8 @@ export function CheckoutPage() {
               </div>
               {orderType === "DELIVERY" && riderTip > 0 && (
                 <div className="flex justify-between text-muted">
-                  <span>Rider Tip</span>
-                  <span className="font-medium text-roast">{formatPeso(riderTip)}</span>
+                  <span>Rider Tip <span className="text-[10px]">(cash to rider, not billed)</span></span>
+                  <span className="font-medium text-roast">+{formatPeso(riderTip)}</span>
                 </div>
               )}
               <div className="border-t border-line pt-2 flex justify-between text-base font-bold">

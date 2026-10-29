@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../config/db.js";
 import { AppError } from "../utils/http.js";
 import { computePriority, nextOrderNumber } from "../utils/orderNumber.js";
+import { logger } from "../utils/logger.js";
 import {
   ACTIVE_QUEUE_STATUSES,
   assertTransition,
@@ -171,6 +172,10 @@ async function hydrateItems(tx, items) {
   });
 }
 
+/** Order payloads reach both customers and the staff board, so the customer join is limited to
+ *  the fields either view shows — never passwordHash or the reset token. */
+const customerSelect = { id: true, name: true, email: true, phone: true };
+
 function orderIncludes() {
   return {
     items: {
@@ -181,7 +186,7 @@ function orderIncludes() {
       },
     },
     delivery: true,
-    customer: { select: { id: true, name: true, email: true, phone: true } },
+    customer: { select: customerSelect },
   };
 }
 
@@ -202,7 +207,7 @@ export async function createOrder(customer, input) {
     const deliveryFee = input.type === "DELIVERY" ? Number(settings?.deliveryFee || 0) : 0;
     const created = await tx.order.create({
       data: {
-        orderNumber: await nextOrderNumber(),
+        orderNumber: await nextOrderNumber(tx),
         customerId: customer.sub || customer.id,
         type: input.type,
         status: "PENDING",
@@ -220,7 +225,7 @@ export async function createOrder(customer, input) {
               }
             : undefined,
       },
-      include: { items: true, delivery: true, customer: true },
+      include: { items: true, delivery: true, customer: { select: customerSelect } },
     });
     await recordHistory(tx, {
       orderId: created.id,
@@ -231,27 +236,38 @@ export async function createOrder(customer, input) {
     return created;
   });
 
-  await notifyStaff({
-    type: "NEW_ORDER",
-    title: "New order received",
-    body: `${order.orderNumber} • ${order.customer.name} • ${order.type.toLowerCase()}`,
-    orderId: order.id,
-  });
-  await notifyUser({
-    userId: order.customerId,
-    type: "ORDER_CREATED",
-    title: "Order placed",
-    body: `${order.orderNumber} is in the kitchen queue.`,
-    orderId: order.id,
-  });
-  await prisma.alert.create({
-    data: {
+  // The order is committed at this point. A notification, alert or SSE hiccup must not fail the
+  // request: the customer would see an error on an order the kitchen already holds, and retrying
+  // would duplicate it. Alerting staff is retried by the queue view, so logging is enough.
+  try {
+    await notifyStaff({
       type: "NEW_ORDER",
-      message: `New order ${order.orderNumber}`,
+      title: "New order received",
+      body: `${order.orderNumber} • ${order.customer.name} • ${order.type.toLowerCase()}`,
       orderId: order.id,
-    },
-  });
-  realtime.broadcast({ type: "order", audience: "staff", orderId: order.id });
+    });
+    await notifyUser({
+      userId: order.customerId,
+      type: "ORDER_CREATED",
+      title: "Order placed",
+      body: `${order.orderNumber} is in the kitchen queue.`,
+      orderId: order.id,
+    });
+    await prisma.alert.create({
+      data: {
+        type: "NEW_ORDER",
+        message: `New order ${order.orderNumber}`,
+        orderId: order.id,
+      },
+    });
+    realtime.broadcast({ type: "order", audience: "staff", orderId: order.id });
+  } catch (error) {
+    logger.error("Order saved but the kitchen notification failed", {
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      message: error.message,
+    });
+  }
   return serializeOrder(order);
 }
 
@@ -322,7 +338,7 @@ export async function queueOrders() {
 export async function updateStatus(id, status, actor) {
   const current = await prisma.order.findUnique({
     where: { id },
-    include: { items: true, customer: true },
+    include: { items: true, customer: { select: customerSelect } },
   });
   if (!current) throw new AppError("Order not found.", 404, "NOT_FOUND");
   assertTransition(current.status, status, { type: current.type, actorRole: actor.role });
@@ -334,7 +350,7 @@ export async function updateStatus(id, status, actor) {
       autoCancelAt: status === "CONFIRMED" ? null : undefined,
       readyAt: status === "READY" && !current.readyAt ? new Date() : undefined,
     };
-    const next = await tx.order.update({ where: { id }, data, include: { items: true, delivery: true, customer: true } });
+    const next = await tx.order.update({ where: { id }, data, include: { items: true, delivery: true, customer: { select: customerSelect } } });
     await recordHistory(tx, {
       orderId: id,
       actor,
@@ -387,7 +403,7 @@ export async function updateStatus(id, status, actor) {
 export async function completeByCustomer(id, actor) {
   const current = await prisma.order.findUnique({
     where: { id },
-    include: { items: true, delivery: true, customer: true },
+    include: { items: true, delivery: true, customer: { select: customerSelect } },
   });
   if (!current) throw new AppError("Order not found.", 404, "NOT_FOUND");
   if (actor.role === "CUSTOMER" && current.customerId !== (actor.sub || actor.id)) {
@@ -402,7 +418,7 @@ export async function completeByCustomer(id, actor) {
     const next = await tx.order.update({
       where: { id },
       data,
-      include: { items: true, delivery: true, customer: true },
+      include: { items: true, delivery: true, customer: { select: customerSelect } },
     });
     await recordHistory(tx, {
       orderId: id,
@@ -446,7 +462,7 @@ export async function completeByCustomer(id, actor) {
 export async function notifyRiderArrived(id, actor) {
   const current = await prisma.order.findUnique({
     where: { id },
-    include: { customer: true, delivery: true },
+    include: { customer: { select: customerSelect }, delivery: true },
   });
   if (!current) throw new AppError("Order not found.", 404, "NOT_FOUND");
 
@@ -496,7 +512,7 @@ export async function cancelOrder(id, actor, reason) {
     const next = await tx.order.update({
       where: { id },
       data: { status: "CANCELLED", cancelReason: reason || null },
-      include: { items: true, delivery: true, customer: true },
+      include: { items: true, delivery: true, customer: { select: customerSelect } },
     });
     await recordHistory(tx, {
       orderId: id,
@@ -528,7 +544,7 @@ export async function cancelOrder(id, actor, reason) {
 export async function updateOrder(id, actor, input) {
   const current = await prisma.order.findUnique({
     where: { id },
-    include: { items: true, delivery: true, customer: true },
+    include: { items: true, delivery: true, customer: { select: customerSelect } },
   });
   if (!current) throw new AppError("Order not found.", 404, "NOT_FOUND");
   if (actor.role === "CUSTOMER") {
@@ -605,7 +621,7 @@ export async function updateOrder(id, actor, input) {
         deliveryFee,
         total: subtotal + deliveryFee,
       },
-      include: { items: true, delivery: true, customer: true },
+      include: { items: true, delivery: true, customer: { select: customerSelect } },
     });
     return next;
   });

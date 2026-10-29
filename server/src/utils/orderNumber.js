@@ -1,7 +1,9 @@
 import { prisma } from "../config/db.js";
 
-export async function nextOrderNumber() {
-  const last = await prisma.order.findFirst({
+/** Runs on the caller's client. Inside a transaction it must receive `tx`, otherwise Prisma opens a
+ *  second pooled connection while the transaction is holding one. */
+export async function nextOrderNumber(client = prisma) {
+  const last = await client.order.findFirst({
     orderBy: { createdAt: "desc" },
     select: { orderNumber: true },
   });

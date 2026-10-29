@@ -127,7 +127,9 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   if (access) headers.set("Authorization", `Bearer ${access}`);
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 8000);
+  // A sleeping Render instance often needs longer than 8s for the first write, and aborting there
+  // told customers the order was NOT saved when the kitchen may already have it.
+  const timeoutId = setTimeout(() => controller.abort(), method === "GET" ? 8000 : 25000);
 
   try {
     const response = await fetch(`${API_URL}${path}`, {
@@ -150,9 +152,15 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
 
     if (isJson && !response.ok) {
       // Real backend answered with a real business error — surface it, do not fake success.
-      const errJson = (await response.json().catch(() => null)) as Envelope<T> | null;
+      const errJson = (await response.json().catch(() => null)) as
+        | { success: false; error: { message: string; code?: string; requestId?: string } }
+        | null;
       if (errJson && "error" in errJson) {
-        throw new Error(errJson.error.message);
+        const { message, code, requestId } = errJson.error;
+        // Server-side faults all read the same ("Something went wrong"), so carry the reference
+        // that matches the logged line; without it a production failure is undiagnosable.
+        const ref = requestId ? ` (${code || "error"} · ref ${requestId})` : "";
+        throw new Error(`${message}${ref}`);
       }
     }
 
@@ -175,6 +183,12 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
       setConnectionStatus("offline");
       lastFailureTime = Date.now();
       scheduleLivenessCheck();
+      // The request may have landed after the wait ran out, so never claim it was not saved.
+      if (realBackendOnly) {
+        throw new Error(
+          "The kitchen server took too long to answer. Your order may already be placed — open My Orders before trying again.",
+        );
+      }
     } else if (err instanceof TypeError) {
       // network failure
       setConnectionStatus("offline");

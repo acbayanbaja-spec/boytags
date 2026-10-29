@@ -5,7 +5,10 @@ services:
     plan: starter
     rootDir: server
     buildCommand: npm install && npx prisma generate
-    preDeployCommand: npx prisma migrate deploy || npx prisma db push || echo "Migration skipped or deferred: database connection was not established."
+    # Supabase pauses the project when idle, so the first push attempt usually fails and the app
+    # would otherwise start against a stale schema (every order write then 500s). Retry once the
+    # sleeping database has had time to wake.
+    preDeployCommand: npx prisma migrate deploy || npx prisma db push || (echo "Retrying prisma db push after database wake-up..." && sleep 25 && npx prisma db push) || echo "Schema push deferred: the app started without syncing the schema."
     startCommand: npm start
     healthCheckPath: /health
     envVars:

@@ -1,4 +1,4 @@
-import { asyncHandler, created, ok } from "../utils/http.js";
+import { asyncHandler, created, ok, AppError } from "../utils/http.js";
 import * as authService from "../services/authService.js";
 import { prisma } from "../config/db.js";
 import { publicUser } from "../utils/tokens.js";
@@ -31,6 +31,11 @@ export const reset = asyncHandler(async (req, res) => {
 
 export const me = asyncHandler(async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id: req.user.sub } });
+  // A token can outlive its row (a reseed deletes every account), and publicUser(null) would
+  // crash into a masked 500. 401 makes the app drop the dead session and show the sign-in page.
+  if (!user) {
+    throw new AppError("This account no longer exists. Please sign in again.", 401, "ACCOUNT_MISSING");
+  }
   ok(res, publicUser(user));
 });
 
