@@ -1,17 +1,9 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { api } from "@/lib/api";
+import { reconcileCart, type CartCustomization, type CartItem } from "@/lib/cartReconciliation";
 import type { Product } from "@/types";
-
-export type CartCustomization = {
-  cut?: string;
-  sauce?: string;
-  specialNotes?: string;
-};
-
-export type CartItem = {
-  product: Product;
-  quantity: number;
-  customization?: CartCustomization;
-};
 
 type CartContextValue = {
   items: CartItem[];
@@ -38,6 +30,22 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     localStorage.setItem(KEY, JSON.stringify(items));
   }, [items]);
+
+  // A cart saved while the menu was served from the offline demo store holds ids like "prod_whole",
+  // which the live kitchen rejects. Re-point them at the real dishes by slug before checkout.
+  const { data: catalog } = useQuery<Product[]>({
+    queryKey: ["products"],
+    queryFn: () => api<Product[]>("/api/products"),
+  });
+
+  useEffect(() => {
+    if (!catalog?.length) return;
+    const { items: repaired, dropped } = reconcileCart(items, catalog);
+    if (dropped.length) {
+      toast.error(`${dropped.join(", ")} ${dropped.length === 1 ? "is" : "are"} no longer on the menu and were removed from your cart.`);
+    }
+    if (repaired !== items) setItems(repaired);
+  }, [catalog, items]);
 
   const value = useMemo<CartContextValue>(() => {
     const add = (product: Product, quantity = 1, customization?: CartCustomization) => {

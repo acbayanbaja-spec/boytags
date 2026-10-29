@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const productCreateSchema = z.object({
   body: z.object({
-    categoryId: z.string().uuid(),
+    categoryId: z.string().uuid("Choose a category for this dish."),
     name: z.string().min(2).max(120),
     description: z.string().min(8).max(800),
     price: z.coerce.number().positive(),

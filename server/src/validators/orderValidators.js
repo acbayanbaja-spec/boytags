@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 const cartItem = z.object({
-  productId: z.string().uuid(),
+  productId: z.string().uuid("This dish is no longer on the live menu. Remove it and re-add it from the menu."),
   quantity: z.coerce.number().int().min(1).max(50),
 });
 
