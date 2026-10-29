@@ -17,6 +17,7 @@ import {
   Clock,
   Sparkles,
   Phone,
+  History,
 } from "lucide-react";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -414,6 +415,7 @@ export function StaffShell() {
           <StaffLink to="/staff/queue" icon={<ClipboardList className="h-4 w-4" />} label="Kitchen Queue (KDS)" />
           <StaffLink to="/staff/products" icon={<UtensilsCrossed className="h-4 w-4" />} label="Inventory & Menu" />
           <StaffLink to="/staff/alerts" icon={<Bell className="h-4 w-4" />} label="Unclaimed Alerts" />
+          <StaffLink to="/staff/history" icon={<History className="h-4 w-4" />} label="Order Change History" />
           <StaffLink to="/" icon={<Store className="h-4 w-4" />} label="Customer Storefront" />
         </div>
 
@@ -446,11 +448,12 @@ export function StaffShell() {
         </div>
 
         {/* Mobile Staff Bottom Bar */}
-        <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-line bg-paper md:hidden shadow-lg">
+        <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-line bg-paper md:hidden shadow-lg">
           <MobileLink to="/staff" icon={<LayoutDashboard className="h-5 w-5" />} label="Dash" />
           <MobileLink to="/staff/queue" icon={<ClipboardList className="h-5 w-5" />} label="Queue" />
-          <MobileLink to="/staff/products" icon={<UtensilsCrossed className="h-5 w-5" />} label="Inventory" />
+          <MobileLink to="/staff/products" icon={<UtensilsCrossed className="h-5 w-5" />} label="Stock" />
           <MobileLink to="/staff/alerts" icon={<Bell className="h-5 w-5" />} label="Alerts" />
+          <MobileLink to="/staff/history" icon={<History className="h-5 w-5" />} label="History" />
         </nav>
       </div>
     </div>

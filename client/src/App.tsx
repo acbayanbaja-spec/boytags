@@ -23,6 +23,7 @@ import { StaffDashboardPage } from "@/pages/staff/DashboardPage";
 import { StaffQueuePage } from "@/pages/staff/QueuePage";
 import { StaffProductsPage } from "@/pages/staff/ProductsPage";
 import { StaffAlertsPage } from "@/pages/staff/AlertsPage";
+import { StaffAuditPage } from "@/pages/staff/AuditPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -127,6 +128,7 @@ export function App() {
                 <Route path="queue" element={<StaffQueuePage />} />
                 <Route path="products" element={<StaffProductsPage />} />
                 <Route path="alerts" element={<StaffAlertsPage />} />
+                <Route path="history" element={<StaffAuditPage />} />
                 <Route path="*" element={<Navigate to="/staff" replace />} />
               </Route>
             </Routes>

@@ -190,8 +190,10 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   }
 }
 
-function handleFallback<T>(path: string, options: RequestInit = {}): T {
+function handleFallback<T>(rawPath: string, options: RequestInit = {}): T {
   setConnectionStatus("offline");
+  const [path, search = ""] = rawPath.split("?");
+  const params = new URLSearchParams(search);
   const method = (options.method || "GET").toUpperCase();
   const body = options.body ? (typeof options.body === "string" ? JSON.parse(options.body) : options.body) : {};
 
@@ -244,10 +246,18 @@ function handleFallback<T>(path: string, options: RequestInit = {}): T {
   if (path === "/api/orders" && method === "GET") {
     const currentUser = mockBackend.getCurrentUser();
     if (!currentUser) return [] as unknown as T;
-    return mockBackend.getOrders(currentUser) as unknown as T;
+    const all = mockBackend.getOrders(currentUser) as { status: string }[];
+    const scope = params.get("scope");
+    const HISTORY = ["COMPLETED", "CANCELLED"];
+    if (scope === "history") return all.filter((o) => HISTORY.includes(o.status)) as unknown as T;
+    if (scope === "active") return all.filter((o) => !HISTORY.includes(o.status)) as unknown as T;
+    return all as unknown as T;
   }
   if (path === "/api/orders/queue" && method === "GET") {
     return mockBackend.getQueueOrders() as unknown as T;
+  }
+  if (path === "/api/orders/audit" && method === "GET") {
+    return mockBackend.getAuditLog() as unknown as T;
   }
   if (path === "/api/orders" && method === "POST") {
     return mockBackend.createOrder(body) as unknown as T;
@@ -282,9 +292,7 @@ function handleFallback<T>(path: string, options: RequestInit = {}): T {
     return mockBackend.getDashboardStats() as unknown as T;
   }
   if (path.startsWith("/api/alerts") && method === "GET") {
-    const url = new URL(path, "http://dummy.local");
-    const status = url.searchParams.get("status") || "OPEN";
-    return mockBackend.getAlerts(status) as unknown as T;
+    return mockBackend.getAlerts(params.get("status") || "OPEN") as unknown as T;
   }
   if (path.match(/\/api\/alerts\/[^/]+\/ack$/) && method === "POST") {
     const id = path.split("/")[3];

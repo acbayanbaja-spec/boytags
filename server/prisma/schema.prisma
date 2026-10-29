@@ -114,6 +114,7 @@ model Order {
   customerNotes  String?
   cancelReason   String?
   unclaimedAt    DateTime?
+  readyAt        DateTime?
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
   items          OrderItem[]

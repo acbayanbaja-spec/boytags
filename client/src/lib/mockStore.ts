@@ -503,6 +503,16 @@ class MockBackend {
     }
   }
 
+  /** Returns reserved stock to the shelf when an order leaves the pipeline. */
+  private restock(order: Order) {
+    for (const item of order.items || []) {
+      const prod = this.products.find((p) => p.id === item.productId);
+      if (!prod) continue;
+      prod.availableQty = (prod.availableQty ?? 0) + item.quantity;
+      prod.soldOut = prod.availableQty <= 0;
+    }
+  }
+
   /** Mirrors the server's expiry watcher: overdue unfulfilled orders auto-cancel and leave the queue. */
   private sweepExpired() {
     const now = Date.now();
@@ -516,6 +526,7 @@ class MockBackend {
       order.status = "CANCELLED";
       order.cancelReason = "Auto-expired: the scheduled pickup or delivery time passed without confirmation.";
       order.updatedAt = new Date().toISOString();
+      this.restock(order);
       this.notifications.unshift({
         id: `notif_${Date.now()}_exp`,
         orderId: order.id,
@@ -526,6 +537,27 @@ class MockBackend {
         createdAt: new Date().toISOString(),
       });
       emitMockStore({ type: "order-expired", orderId: order.id, orderNumber: order.orderNumber, status: "CANCELLED" });
+      changed = true;
+    }
+    for (const order of this.orders) {
+      if (order.status !== "READY" && order.status !== "OUT_FOR_DELIVERY") continue;
+      const since = new Date(order.readyAt || order.scheduledAt).getTime();
+      if (Number.isNaN(since) || now < since + 15 * 60 * 1000) continue;
+      const waitedMinutes = Math.round((now - since) / 60000);
+      order.status = "UNCLAIMED";
+      order.unclaimedAt = new Date().toISOString();
+      order.priority = "URGENT";
+      order.updatedAt = new Date().toISOString();
+      this.notifications.unshift({
+        id: `notif_${Date.now()}_unc`,
+        orderId: order.id,
+        type: "UNCLAIMED",
+        title: `Order ${order.orderNumber} is unclaimed`,
+        body: `It has been ready for ${waitedMinutes} minutes without being claimed. Please contact the customer or release the stock.`,
+        read: false,
+        createdAt: new Date().toISOString(),
+      });
+      emitMockStore({ type: "order-unclaimed", orderId: order.id, orderNumber: order.orderNumber, status: "UNCLAIMED", waitedMinutes });
       changed = true;
     }
     if (changed) this.save();
@@ -727,6 +759,26 @@ class MockBackend {
     return this.orders.filter((o) => ACTIVE_QUEUE.includes(o.status));
   }
 
+  /** Staff audit trail, mirroring the server's /api/orders/audit shape. */
+  public getAuditLog(limit = 60) {
+    return this.orders
+      .flatMap((order) =>
+        (order.history || []).map((entry) => ({
+          ...entry,
+          orderId: order.id,
+          order: {
+            id: order.id,
+            orderNumber: order.orderNumber,
+            status: order.status,
+            scheduledAt: order.scheduledAt,
+            type: order.type,
+          },
+        })),
+      )
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, limit);
+  }
+
   public getOrder(id: string): Order {
     const order = this.orders.find((o) => o.id === id || o.orderNumber === id);
     if (!order) throw new Error("Order not found");
@@ -767,6 +819,17 @@ class MockBackend {
         lineTotal,
       };
     });
+
+    for (const item of orderItems) {
+      const prod = this.products.find((p) => p.id === item.productId);
+      if (!prod) continue;
+      if (prod.soldOut || (prod.availableQty ?? 0) < item.quantity) {
+        throw new Error(`${prod.name} does not have enough stock for this order.`);
+      }
+      prod.availableQty = Math.max(0, (prod.availableQty ?? 0) - item.quantity);
+      prod.soldOut = prod.availableQty <= 0;
+    }
+    this.save();
 
     const deliveryFee = payload.type === "DELIVERY" ? 40 : 0;
     const total = subtotal + deliveryFee;
@@ -822,6 +885,7 @@ class MockBackend {
     const prevStatus = order.status;
     order.status = newStatus;
     if (newStatus === "CONFIRMED") order.autoCancelAt = null;
+    if (newStatus === "READY" && !order.readyAt) order.readyAt = new Date().toISOString();
     order.updatedAt = new Date().toISOString();
 
     const actor = this.currentUser || INITIAL_USERS[1];
@@ -887,9 +951,11 @@ class MockBackend {
 
   public cancelOrder(id: string, reason?: string): Order {
     const order = this.getOrder(id);
+    const wasCancelled = order.status === "CANCELLED";
     order.status = "CANCELLED";
     order.cancelReason = reason || "Cancelled by customer.";
     order.updatedAt = new Date().toISOString();
+    if (!wasCancelled) this.restock(order);
 
     const actor = this.currentUser || INITIAL_USERS[2];
     if (!order.history) order.history = [];
@@ -1035,6 +1101,7 @@ export type MockStoreEvent = {
   orderId?: string;
   orderNumber?: string;
   status?: string;
+  waitedMinutes?: number;
 };
 
 type MockStoreListener = (event: MockStoreEvent) => void;

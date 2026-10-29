@@ -37,6 +37,7 @@ router.delete("/products/:id", authenticate, requireRoles("STAFF", "ADMIN"), val
 router.post("/orders", authenticate, validate(createOrderSchema), orders.create);
 router.get("/orders", authenticate, orders.list);
 router.get("/orders/queue", authenticate, requireRoles("STAFF", "ADMIN"), orders.queue);
+router.get("/orders/audit", authenticate, requireRoles("STAFF", "ADMIN"), orders.auditLog);
 router.get("/orders/:id", authenticate, orders.get);
 router.patch("/orders/:id", authenticate, validate(updateOrderSchema), orders.update);
 router.patch("/orders/:id/status", authenticate, requireRoles("STAFF", "ADMIN"), validate(statusSchema), orders.status);

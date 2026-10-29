@@ -49,6 +49,18 @@ function serializeOrder(order) {
   };
 }
 
+function deliverySnapshot(delivery) {
+  if (!delivery) return null;
+  return {
+    address: delivery.address ?? null,
+    landmark: delivery.landmark ?? null,
+    notes: delivery.notes ?? null,
+    contactPhone: delivery.contactPhone ?? null,
+    latitude: delivery.latitude == null ? null : money(delivery.latitude),
+    longitude: delivery.longitude == null ? null : money(delivery.longitude),
+  };
+}
+
 async function recordHistory(tx, { orderId, actor, action, previousValue, newValue }) {
   await tx.orderHistory.create({
     data: {
@@ -63,9 +75,19 @@ async function recordHistory(tx, { orderId, actor, action, previousValue, newVal
   });
 }
 
+async function raiseAlertOnce(tx, { type, productId, message }) {
+  const existing = await tx.alert.findFirst({
+    where: { type, productId, status: "OPEN" },
+  });
+  if (existing) return;
+  await tx.alert.create({ data: { type, message, productId } });
+}
+
 async function applyInventory(tx, items, direction) {
   const settings = await tx.setting.findUnique({ where: { id: "default" } });
+  const lowStockThreshold = settings?.lowStockThreshold ?? 0;
   for (const item of items) {
+    let product;
     if (direction === "decrement") {
       const result = await tx.product.updateMany({
         where: {
@@ -76,50 +98,54 @@ async function applyInventory(tx, items, direction) {
         data: { availableQty: { decrement: item.quantity } },
       });
       if (result.count !== 1) {
-        const product = await tx.product.findUnique({ where: { id: item.productId } });
+        const missing = await tx.product.findUnique({ where: { id: item.productId } });
         throw new AppError(
-          product
-            ? `${product.name} does not have enough stock for this order.`
+          missing
+            ? `${missing.name} does not have enough stock for this order.`
             : "One of the products is no longer available.",
           409,
           "INVENTORY",
         );
       }
+      product = await tx.product.findUnique({ where: { id: item.productId } });
     } else {
-      await tx.product.update({
+      product = await tx.product.update({
         where: { id: item.productId },
         data: { availableQty: { increment: item.quantity } },
       });
     }
 
-    const product = await tx.product.findUnique({ where: { id: item.productId } });
     const soldOut = product.availableQty <= 0;
-    await tx.product.update({
-      where: { id: product.id },
-      data: { soldOut, availableQty: Math.max(0, product.availableQty) },
-    });
+    if (soldOut !== product.soldOut) {
+      await tx.product.update({ where: { id: product.id }, data: { soldOut } });
+    }
 
-    if (soldOut && direction === "decrement") {
-      const existing = await tx.alert.findFirst({
-        where: { productId: product.id, type: "SOLD_OUT", status: "OPEN" },
-      });
-      if (!existing) {
-        await tx.alert.create({
-          data: {
-            type: "SOLD_OUT",
-            message: `${product.name} is sold out.`,
-            productId: product.id,
-          },
+    if (direction === "decrement") {
+      if (soldOut) {
+        await raiseAlertOnce(tx, {
+          type: "SOLD_OUT",
+          productId: product.id,
+          message: `${product.name} is sold out.`,
+        });
+      } else if (product.availableQty <= lowStockThreshold) {
+        await raiseAlertOnce(tx, {
+          type: "LOW_STOCK",
+          productId: product.id,
+          message: `${product.name} is low on stock (${product.availableQty} left).`,
         });
       }
-    } else if (!soldOut && settings && product.availableQty <= settings.lowStockThreshold && direction === "decrement") {
-      await tx.alert.create({
-        data: {
-          type: "LOW_STOCK",
-          message: `${product.name} is low on stock (${product.availableQty} left).`,
-          productId: product.id,
-        },
+    } else {
+      // Stock came back, so the previous "out of stock" warnings are no longer true.
+      await tx.alert.updateMany({
+        where: { productId: product.id, type: "SOLD_OUT", status: "OPEN" },
+        data: { status: "RESOLVED" },
       });
+      if (product.availableQty > lowStockThreshold) {
+        await tx.alert.updateMany({
+          where: { productId: product.id, type: "LOW_STOCK", status: "OPEN" },
+          data: { status: "RESOLVED" },
+        });
+      }
     }
   }
 }
@@ -241,9 +267,16 @@ export async function getOrder(id, actor) {
   return serializeOrder(order);
 }
 
+const HISTORY_STATUSES = ["COMPLETED", "CANCELLED"];
+
 export async function listOrders(actor, query = {}) {
   const where = {};
   if (actor.role === "CUSTOMER") where.customerId = actor.sub;
+  if (query.scope === "history") {
+    where.status = { in: HISTORY_STATUSES };
+  } else if (query.scope === "active") {
+    where.status = { notIn: HISTORY_STATUSES };
+  }
   if (query.status) where.status = query.status;
   if (query.type) where.type = query.type;
   if (query.search) {
@@ -258,11 +291,12 @@ export async function listOrders(actor, query = {}) {
     if (query.from) where.scheduledAt.gte = new Date(query.from);
     if (query.to) where.scheduledAt.lte = new Date(query.to);
   }
+  const isHistory = query.scope === "history";
   const orders = await prisma.order.findMany({
     where,
     include: orderIncludes(),
-    orderBy: [{ scheduledAt: "asc" }, { createdAt: "desc" }],
-    take: Number(query.limit) || 100,
+    orderBy: isHistory ? [{ createdAt: "desc" }] : [{ scheduledAt: "asc" }, { createdAt: "desc" }],
+    take: Number(query.limit) || (isHistory ? 200 : 100),
   });
   return orders.map(serializeOrder);
 }
@@ -272,15 +306,16 @@ export async function queueOrders() {
     where: { status: { in: ACTIVE_QUEUE_STATUSES } },
     include: orderIncludes(),
   });
-  const now = Date.now();
+  const rank = { UNCLAIMED: 0, URGENT: 1, HIGH: 2, NORMAL: 3 };
   return orders
     .map(serializeOrder)
     .sort((a, b) => {
-      const rank = { UNCLAIMED: 0, URGENT: 1, HIGH: 2, NORMAL: 3 };
-      const pa = rank[a.status === "UNCLAIMED" ? "UNCLAIMED" : a.priority];
-      const pb = rank[b.status === "UNCLAIMED" ? "UNCLAIMED" : b.priority];
+      const pa = rank[a.status === "UNCLAIMED" ? "UNCLAIMED" : a.priority] ?? 3;
+      const pb = rank[b.status === "UNCLAIMED" ? "UNCLAIMED" : b.priority] ?? 3;
       if (pa !== pb) return pa - pb;
-      return new Date(a.scheduledAt) - new Date(b.scheduledAt) || now;
+      const bySchedule = new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime();
+      if (bySchedule !== 0) return bySchedule;
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
     });
 }
 
@@ -297,6 +332,7 @@ export async function updateStatus(id, status, actor) {
       status,
       priority: computePriority({ ...current, status }),
       autoCancelAt: status === "CONFIRMED" ? null : undefined,
+      readyAt: status === "READY" && !current.readyAt ? new Date() : undefined,
     };
     const next = await tx.order.update({ where: { id }, data, include: { items: true, delivery: true, customer: true } });
     await recordHistory(tx, {
@@ -413,6 +449,14 @@ export async function notifyRiderArrived(id, actor) {
     include: { customer: true, delivery: true },
   });
   if (!current) throw new AppError("Order not found.", 404, "NOT_FOUND");
+
+  await recordHistory(prisma, {
+    orderId: id,
+    actor,
+    action: "RIDER_ARRIVED",
+    previousValue: null,
+    newValue: { address: current.delivery?.address || null },
+  });
 
   await notifyUser({
     userId: current.customerId,
@@ -531,8 +575,8 @@ export async function updateOrder(id, actor, input) {
         orderId: id,
         actor,
         action: "DELIVERY_UPDATED",
-        previousValue: current.delivery,
-        newValue: input.delivery,
+        previousValue: deliverySnapshot(current.delivery),
+        newValue: deliverySnapshot({ ...current.delivery, ...input.delivery }),
       });
     }
     if (input.customerNotes !== undefined) {
@@ -576,4 +620,26 @@ export async function listHistory(id, actor) {
     where: { orderId: id },
     orderBy: { createdAt: "asc" },
   });
+}
+
+/** Staff-wide audit trail: the most recent changes across every order. */
+export async function recentHistory(limit = 60) {
+  const rows = await prisma.orderHistory.findMany({
+    orderBy: { createdAt: "desc" },
+    take: Math.min(Math.max(Number(limit) || 60, 1), 200),
+    include: {
+      order: { select: { id: true, orderNumber: true, status: true, scheduledAt: true, type: true } },
+    },
+  });
+  return rows.map((row) => ({
+    id: row.id,
+    orderId: row.orderId,
+    action: row.action,
+    actorName: row.actorName,
+    actorRole: row.actorRole,
+    previousValue: row.previousValue ?? null,
+    newValue: row.newValue ?? null,
+    createdAt: row.createdAt,
+    order: row.order,
+  }));
 }

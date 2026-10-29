@@ -61,6 +61,9 @@ export function CheckoutPage() {
   const [contactPhone, setContactPhone] = useState<string>(user?.phone || "");
   const [lat, setLat] = useState<number>(TUPI_BOYTAGS_COORDS.lat);
   const [lng, setLng] = useState<number>(TUPI_BOYTAGS_COORDS.lng);
+  // The picker starts on the shop's own coordinates, so an unpinned order would silently
+  // send the rider to Boytag's instead of the customer. Require a deliberate pin/GPS/landmark.
+  const [pinPlaced, setPinPlaced] = useState(false);
 
   // Payment method & tip
   const [paymentMethod, setPaymentMethod] = useState<"COD" | "GCASH" | "MAYA" | "CARD">("COD");
@@ -155,6 +158,10 @@ export function CheckoutPage() {
         setError("Please enter a valid mobile number for rider coordination.");
         return;
       }
+      if (!pinPlaced) {
+        setError("Please drop the map pin on your gate (or tap Locate Me / a landmark) so our rider reaches the exact spot.");
+        return;
+      }
     }
 
     setLoading(true);
@@ -174,7 +181,7 @@ export function CheckoutPage() {
         )
         .join(" ");
 
-      const combinedNotes = [customerNotes.trim(), itemPrepNotes].filter(Boolean).join(" • ");
+      const combinedNotes = [customerNotes.trim(), itemPrepNotes].filter(Boolean).join(" • ").slice(0, 400);
 
       const payload = {
         type: orderType,
@@ -441,12 +448,28 @@ export function CheckoutPage() {
                 onChange={(newLat, newLng) => {
                   setLat(newLat);
                   setLng(newLng);
+                  setPinPlaced(true);
+                  setError(null);
                 }}
               />
 
-              <div className="flex items-center justify-between text-[11px] text-muted bg-cream rounded-xl p-2.5 px-3 border border-line">
-                <span>Coordinates:</span>
-                <span className="font-mono text-ink font-bold">
+              <div
+                className={`flex items-center justify-between gap-2 rounded-xl border p-2.5 px-3 text-[11px] ${
+                  pinPlaced ? "border-line bg-cream text-muted" : "border-amber-400 bg-amber-50 text-amber-900"
+                }`}
+              >
+                <span className="flex items-center gap-1.5 font-bold">
+                  {pinPlaced ? (
+                    <>
+                      <CheckCircle2 className="h-3.5 w-3.5 text-leaf" /> Pinpoint locked
+                    </>
+                  ) : (
+                    <>
+                      <AlertCircle className="h-3.5 w-3.5 animate-pulse" /> Pin is still on our store — drag it to your gate
+                    </>
+                  )}
+                </span>
+                <span className="font-mono font-bold text-ink">
                   {lat.toFixed(5)}, {lng.toFixed(5)}
                 </span>
               </div>
@@ -455,6 +478,7 @@ export function CheckoutPage() {
                 <textarea
                   required
                   rows={2}
+                  maxLength={500}
                   placeholder="e.g. Purok 3, Near Tupi Central Elementary School or South Cotabato-Sarangani Rd"
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
@@ -482,6 +506,7 @@ export function CheckoutPage() {
                         setLandmark(lm.name);
                         setLat(lm.lat);
                         setLng(lm.lng);
+                        setPinPlaced(true);
                         if (!address) setAddress(`Near ${lm.name}, Poblacion, Tupi`);
                       }}
                       className="rounded-full border border-line bg-cream px-2.5 py-1 text-[11px] font-medium text-ink hover:border-roast hover:text-roast transition"
@@ -495,22 +520,26 @@ export function CheckoutPage() {
               <Field label="Barangay Landmark (Crucial for Rider)">
                 <input
                   type="text"
+                  maxLength={160}
                   placeholder="e.g. Yellow gate beside sari-sari store, near Tupi Municipal Gym"
                   value={landmark}
                   onChange={(e) => setLandmark(e.target.value)}
                   className={inputClass()}
                 />
+                <p className="mt-1 text-right text-[10px] text-muted">{landmark.length}/160</p>
               </Field>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Rider Delivery Notes">
                   <input
                     type="text"
+                    maxLength={400}
                     placeholder="e.g. Ring doorbell, dogs inside"
                     value={deliveryNotes}
                     onChange={(e) => setDeliveryNotes(e.target.value)}
                     className={inputClass()}
                   />
+                  <p className="mt-1 text-right text-[10px] text-muted">{deliveryNotes.length}/400</p>
                 </Field>
 
                 <Field label="Contact Mobile Number">
@@ -644,11 +673,13 @@ export function CheckoutPage() {
             <Field label="Notes for the Poblacion Tupi cooking staff (optional)">
               <textarea
                 rows={2}
+                maxLength={400}
                 placeholder="e.g. Extra spicy sawsawan, cut chicken into 4 pieces, extra toasted skin"
                 value={customerNotes}
                 onChange={(e) => setCustomerNotes(e.target.value)}
                 className={inputClass()}
               />
+              <p className="mt-1 text-right text-[10px] text-muted">{customerNotes.length}/400</p>
             </Field>
           </Card>
         </div>

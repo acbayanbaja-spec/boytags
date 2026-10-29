@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   AlertTriangle,
   PackageX,
@@ -13,9 +14,10 @@ import {
   ShieldCheck,
   Flame,
   Phone,
+  Timer,
 } from "lucide-react";
 import { api } from "@/lib/api";
-import { formatDateTime } from "@/lib/utils";
+import { formatDateTime, reducedMotion, waitingLabel } from "@/lib/utils";
 import { sound } from "@/lib/sound";
 import { useRealtime } from "@/hooks/useRealtime";
 import { Button, Card, EmptyState, Skeleton } from "@/components/ui";
@@ -27,6 +29,7 @@ export function StaffAlertsPage() {
   useRealtime();
 
   const [statusFilter, setStatusFilter] = useState<string>("OPEN");
+  const [typeFilter, setTypeFilter] = useState<string>("ALL");
 
   const { data: alerts, isLoading } = useQuery<Alert[]>({
     queryKey: ["alerts", statusFilter],
@@ -53,6 +56,21 @@ export function StaffAlertsPage() {
       void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
   });
+
+  const visibleAlerts = useMemo(
+    () => (alerts || []).filter((a) => typeFilter === "ALL" || a.type === typeFilter),
+    [alerts, typeFilter],
+  );
+
+  const typeCounts = useMemo(() => {
+    const list = alerts || [];
+    return {
+      ALL: list.length,
+      UNCLAIMED_ORDER: list.filter((a) => a.type === "UNCLAIMED_ORDER").length,
+      SOLD_OUT: list.filter((a) => a.type === "SOLD_OUT").length,
+      LOW_STOCK: list.filter((a) => a.type === "LOW_STOCK").length,
+    } as Record<string, number>;
+  }, [alerts]);
 
   function getAlertIcon(type: string) {
     if (type === "UNCLAIMED_ORDER") return <AlertTriangle className="h-5 w-5 text-red-600" />;
@@ -101,6 +119,35 @@ export function StaffAlertsPage() {
         </div>
       </div>
 
+      {/* Type chips */}
+      <div className="flex flex-wrap items-center gap-1.5 text-xs font-semibold">
+        {[
+          { key: "ALL", label: "Everything" },
+          { key: "UNCLAIMED_ORDER", label: "⚠ Unclaimed" },
+          { key: "SOLD_OUT", label: "Sold out" },
+          { key: "LOW_STOCK", label: "Low stock" },
+        ].map((chip) => (
+          <button
+            key={chip.key}
+            type="button"
+            onClick={() => {
+              sound.play("click");
+              setTypeFilter(chip.key);
+            }}
+            className={`rounded-full px-3 py-1.5 transition ${
+              typeFilter === chip.key
+                ? "bg-ink text-paper font-bold shadow-sm"
+                : "border border-line bg-paper text-muted hover:border-roast/40 hover:text-ink"
+            }`}
+          >
+            {chip.label}
+            <span className={`ml-1.5 text-[10px] ${typeFilter === chip.key ? "text-paper/70" : "text-muted/70"}`}>
+              {typeCounts[chip.key] ?? 0}
+            </span>
+          </button>
+        ))}
+      </div>
+
       {/* Alerts Stream */}
       {isLoading ? (
         <div className="space-y-3">
@@ -108,7 +155,7 @@ export function StaffAlertsPage() {
             <Skeleton key={i} className="h-24 w-full rounded-3xl" />
           ))}
         </div>
-      ) : !alerts || alerts.length === 0 ? (
+      ) : !visibleAlerts || visibleAlerts.length === 0 ? (
         <EmptyState
           title="All Clear!"
           body={
@@ -119,12 +166,17 @@ export function StaffAlertsPage() {
         />
       ) : (
         <div className="space-y-4">
-          {alerts.map((alert) => {
+          <AnimatePresence initial={false}>
+          {visibleAlerts.map((alert) => {
             const isUnclaimed = alert.type === "UNCLAIMED_ORDER";
 
             return (
-              <Card
+              <motion.div
                 key={alert.id}
+                {...(reducedMotion ? {} : { initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, scale: 0.98 } })}
+                transition={reducedMotion ? { duration: 0 } : { duration: 0.24, ease: "easeOut" }}
+              >
+              <Card
                 className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 transition ${
                   isUnclaimed && alert.status === "OPEN"
                     ? "border-2 border-red-500 bg-red-50/40 shadow-sm"
@@ -166,6 +218,12 @@ export function StaffAlertsPage() {
                         <Clock className="h-3 w-3" />
                         Triggered {formatDateTime(alert.createdAt)}
                       </span>
+                      {isUnclaimed && alert.status === "OPEN" && (
+                        <span className="inline-flex items-center gap-1 rounded-lg bg-red-600 px-2 py-0.5 font-bold text-white">
+                          <Timer className="h-3 w-3 animate-pulse" />
+                          {waitingLabel(alert.order?.readyAt || alert.order?.scheduledAt || alert.createdAt)}
+                        </span>
+                      )}
                       {alert.acknowledgedBy && (
                         <span>
                           Ack by: <strong>{alert.acknowledgedBy.name}</strong>
@@ -218,8 +276,10 @@ export function StaffAlertsPage() {
                   )}
                 </div>
               </Card>
+              </motion.div>
             );
           })}
+          </AnimatePresence>
         </div>
       )}
     </div>

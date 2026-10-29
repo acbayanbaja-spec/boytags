@@ -6,6 +6,8 @@ import { useAuth } from "@/context/AuthContext";
 import { sound } from "@/lib/sound";
 import { toast } from "sonner";
 
+const isStaff = (role?: string) => role === "STAFF" || role === "ADMIN";
+
 export function useRealtime() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -33,11 +35,20 @@ export function useRealtime() {
           description: "Its scheduled time passed without fulfilment, so it was cancelled and left the queue.",
         });
       }
+      if (event.type === "order-unclaimed") {
+        if (isStaff(user.role)) {
+          sound.play("alert");
+          toast.warning(`Order ${event.orderNumber || ""} is unclaimed`, {
+            description: `Ready ${event.waitedMinutes ?? 0} min ago — hold or release the stock.`,
+          });
+        }
+      }
       void queryClient.invalidateQueries({ queryKey: ["orders"] });
       void queryClient.invalidateQueries({ queryKey: ["order"] });
       void queryClient.invalidateQueries({ queryKey: ["notifications"] });
       void queryClient.invalidateQueries({ queryKey: ["queue"] });
       void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      void queryClient.invalidateQueries({ queryKey: ["alerts"] });
     });
 
     // Listen to SSE server stream
@@ -51,6 +62,7 @@ export function useRealtime() {
             orderNumber?: string;
             status?: string;
             orderId?: string;
+            waitedMinutes?: number;
           };
 
           if (payload.type === "order-completed" || payload.status === "COMPLETED") {
@@ -74,11 +86,25 @@ export function useRealtime() {
             });
           }
 
-          if (payload.type === "order" || payload.type === "order-completed" || payload.type === "order-expired" || payload.type === "staff-event") {
+          if (payload.type === "order-unclaimed" && isStaff(user.role)) {
+            sound.play("alert");
+            toast.warning(`Order ${payload.orderNumber || ""} is unclaimed`, {
+              description: `Ready ${payload.waitedMinutes ?? 0} min ago — contact the customer or release the stock.`,
+            });
+          }
+
+          if (
+            payload.type === "order" ||
+            payload.type === "order-completed" ||
+            payload.type === "order-expired" ||
+            payload.type === "order-unclaimed" ||
+            payload.type === "staff-event"
+          ) {
             void queryClient.invalidateQueries({ queryKey: ["orders"] });
             void queryClient.invalidateQueries({ queryKey: ["order"] });
             void queryClient.invalidateQueries({ queryKey: ["queue"] });
             void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+            void queryClient.invalidateQueries({ queryKey: ["alerts"] });
           }
           if (payload.type === "inventory") {
             void queryClient.invalidateQueries({ queryKey: ["products"] });

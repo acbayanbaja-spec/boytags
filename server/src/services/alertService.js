@@ -59,7 +59,9 @@ export async function processUnclaimedOrders() {
   const candidates = await prisma.order.findMany({
     where: {
       status: { in: ["READY", "OUT_FOR_DELIVERY"] },
-      scheduledAt: { lte: cutoff },
+      // Measure the wait from when the kitchen actually finished the order; scheduledAt is
+      // only the fallback for orders that reached READY before readyAt was tracked.
+      OR: [{ readyAt: { not: null, lte: cutoff } }, { readyAt: null, scheduledAt: { lte: cutoff } }],
     },
     include: { customer: true, items: true },
   });
@@ -114,6 +116,14 @@ export async function processUnclaimedOrders() {
       orderId: order.id,
     });
     realtime.broadcast({ type: "order", audience: "all", orderId: order.id, userId: order.customerId });
+    realtime.broadcast({
+      type: "order-unclaimed",
+      audience: "all",
+      orderId: order.id,
+      userId: order.customerId,
+      orderNumber: order.orderNumber,
+      waitedMinutes: Math.round((Date.now() - new Date(order.readyAt || order.scheduledAt).getTime()) / 60000),
+    });
     marked += 1;
     logger.info("Marked unclaimed order", { orderNumber: order.orderNumber });
     void updated;
@@ -157,10 +167,21 @@ export async function processExpiredOrders() {
     const reason = `Auto-expired: the ${order.type === "DELIVERY" ? "delivery" : "pickup"} time passed and the order was never fulfilled.`;
     await prisma.$transaction(async (tx) => {
       for (const item of order.items) {
-        await tx.product.update({
+        const restocked = await tx.product.update({
           where: { id: item.productId },
-          data: { availableQty: { increment: item.quantity }, soldOut: false },
+          data: { availableQty: { increment: item.quantity } },
         });
+        // Derive availability from the real quantity instead of assuming the item is back in stock.
+        await tx.product.update({
+          where: { id: restocked.id },
+          data: { soldOut: restocked.availableQty <= 0 },
+        });
+        if (restocked.availableQty > 0) {
+          await tx.alert.updateMany({
+            where: { productId: restocked.id, type: "SOLD_OUT", status: "OPEN" },
+            data: { status: "RESOLVED" },
+          });
+        }
       }
       await tx.order.update({
         where: { id: order.id },

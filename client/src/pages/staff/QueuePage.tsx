@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { motion } from "framer-motion";
 import {
   Clock,
   Truck,
@@ -19,9 +20,14 @@ import {
   Columns,
   LayoutGrid,
   BellRing,
+  CalendarClock,
+  Timer,
+  Sunrise,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { api } from "@/lib/api";
-import { formatDateTime, formatPeso, formatTime, waitingLabel } from "@/lib/utils";
+import { countdownLabel, formatDateTime, formatDateLong, formatPeso, formatTime, reducedMotion, waitingLabel } from "@/lib/utils";
 import { sound } from "@/lib/sound";
 import { useRealtime } from "@/hooks/useRealtime";
 import { LocationPicker } from "@/components/MapPin";
@@ -30,6 +36,47 @@ import { KitchenTicketModal } from "@/components/KitchenTicketModal";
 import { Button, Card, EmptyState, Modal, Skeleton, StatusBadge } from "@/components/ui";
 import { STATUS_LABEL, type Order, type OrderStatus } from "@/types";
 import { toast } from "sonner";
+
+/** Groups the queue into roasting-shift bands so staff see *when* to fire each pit. */
+function dayBand(iso: string) {
+  const h = new Date(iso).getHours();
+  if (h < 11) return { key: "morning", label: "Morning batch", icon: Sunrise, color: "text-amber-600" };
+  if (h < 17) return { key: "midday", label: "Midday batch", icon: Sun, color: "text-orange-600" };
+  if (h < 21) return { key: "evening", label: "Evening batch", icon: Moon, color: "text-indigo-600" };
+  return { key: "latenight", label: "Late-night batch", icon: Moon, color: "text-slate-500" };
+}
+
+/** Prep priority: unclaimed/urgent first, then earliest scheduled slot, then first placed. */
+function prepRank(order: Order): number {
+  if (order.status === "UNCLAIMED") return 0;
+  if (order.priority === "URGENT") return 1;
+  if (order.priority === "HIGH") return 2;
+  return 3;
+}
+
+function byPrepOrder(a: Order, b: Order): number {
+  const pa = prepRank(a);
+  const pb = prepRank(b);
+  if (pa !== pb) return pa - pb;
+  const bySlot = new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime();
+  if (bySlot !== 0) return bySlot;
+  return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+}
+
+/** "Today / Tomorrow / Mon 12" so a 6:00 AM slot tomorrow never reads like today. */
+function slotDayLabel(iso: string) {
+  const target = new Date(iso);
+  const now = new Date();
+  const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
+  if (sameDay(target, now)) return "Today";
+  const tomorrow = new Date(now);
+  tomorrow.setDate(now.getDate() + 1);
+  if (sameDay(target, tomorrow)) return "Tomorrow";
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (sameDay(target, yesterday)) return "Yesterday";
+  return target.toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric" });
+}
 
 export function StaffQueuePage() {
   const queryClient = useQueryClient();
@@ -94,17 +141,62 @@ export function StaffQueuePage() {
 
   const filteredQueue = useMemo(() => {
     if (!queue) return [];
-    return queue.filter((order) => {
-      const matchStatus = statusFilter === "ALL" || order.status === statusFilter;
-      const matchType = typeFilter === "ALL" || order.type === typeFilter;
-      const matchSearch =
-        !search.trim() ||
-        order.orderNumber.toLowerCase().includes(search.toLowerCase()) ||
-        order.customer?.name.toLowerCase().includes(search.toLowerCase()) ||
-        order.customer?.phone?.toLowerCase().includes(search.toLowerCase());
-      return matchStatus && matchType && matchSearch;
-    });
+    return queue
+      .filter((order) => {
+        const matchStatus = statusFilter === "ALL" || order.status === statusFilter;
+        const matchType = typeFilter === "ALL" || order.type === typeFilter;
+        const matchSearch =
+          !search.trim() ||
+          order.orderNumber.toLowerCase().includes(search.toLowerCase()) ||
+          order.customer?.name.toLowerCase().includes(search.toLowerCase()) ||
+          order.customer?.phone?.toLowerCase().includes(search.toLowerCase());
+        return matchStatus && matchType && matchSearch;
+      })
+      .sort(byPrepOrder);
   }, [queue, statusFilter, typeFilter, search]);
+
+  /** Ticket rail grouped by scheduled day, then by roasting-shift band. */
+  const queueGroups = useMemo(() => {
+    const byDay = new Map<string, Order[]>();
+    filteredQueue.forEach((order) => {
+      const key = new Date(order.scheduledAt).toDateString();
+      const bucket = byDay.get(key);
+      if (bucket) bucket.push(order);
+      else byDay.set(key, [order]);
+    });
+    return [...byDay.entries()]
+      .sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime())
+      .map(([day, orders]) => {
+        const bands = new Map<string, { label: string; icon: typeof Sunrise; color: string; orders: Order[] }>();
+        orders.forEach((order) => {
+          const band = dayBand(order.scheduledAt);
+          const existing = bands.get(band.key);
+          if (existing) existing.orders.push(order);
+          else bands.set(band.key, { label: band.label, icon: band.icon, color: band.color, orders: [order] });
+        });
+        return {
+          day,
+          count: orders.length,
+          bands: [...bands.values()].sort((a, b) => a.orders[0].scheduledAt.localeCompare(b.orders[0].scheduledAt)),
+        };
+      });
+  }, [filteredQueue]);
+
+  const ticketSections = useMemo(() => {
+    const sections: Array<{ key: string; day: string; bandLabel: string; bandColor: string; orders: Order[] }> = [];
+    queueGroups.forEach((group) => {
+      group.bands.forEach((band) => {
+        sections.push({
+          key: `${group.day}|${band.label}`,
+          day: group.day,
+          bandLabel: band.label,
+          bandColor: band.color,
+          orders: [...band.orders].sort(byPrepOrder),
+        });
+      });
+    });
+    return sections;
+  }, [queueGroups]);
 
   function getNextAction(order: Order): { label: string; nextStatus: OrderStatus } | null {
     if (order.status === "PENDING") {
@@ -132,6 +224,7 @@ export function StaffQueuePage() {
   }
 
   const kanbanColumns: Array<{ title: string; statuses: OrderStatus[]; color: string }> = [
+    { title: "Waiting to be claimed", statuses: ["UNCLAIMED"], color: "border-red-400 bg-red-50/40" },
     { title: "Incoming & Confirmed", statuses: ["PENDING", "CONFIRMED"], color: "border-amber-400 bg-amber-50/30" },
     { title: "Roasting Pit", statuses: ["PREPARING"], color: "border-orange-400 bg-orange-50/30" },
     { title: "Warmer / Packing", statuses: ["READY"], color: "border-emerald-400 bg-emerald-50/30" },
@@ -266,6 +359,38 @@ export function StaffQueuePage() {
         </div>
       </div>
 
+      {/* Priority strip — surfaces what the pit must fire first */}
+      {!isLoading && filteredQueue.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-paper px-4 py-3 shadow-xs">
+          {(() => {
+            const unclaimed = filteredQueue.filter((o) => o.status === "UNCLAIMED").length;
+            const late = filteredQueue.filter((o) => new Date(o.scheduledAt).getTime() < Date.now()).length;
+            const next = filteredQueue[0];
+            return (
+              <>
+                {unclaimed > 0 && (
+                  <span className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-white animate-pulse">
+                    <AlertTriangle className="h-3.5 w-3.5" /> {unclaimed} unclaimed
+                  </span>
+                )}
+                {late > 0 && (
+                  <span className="inline-flex items-center gap-1.5 rounded-xl border border-amber-400 bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-900">
+                    <Clock className="h-3.5 w-3.5" /> {late} past their slot
+                  </span>
+                )}
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-muted">
+                  <ArrowRight className="h-3.5 w-3.5 text-roast" />
+                  Prepare first:
+                  <strong className="display text-sm text-ink">{next.orderNumber}</strong>
+                  {slotDayLabel(next.scheduledAt)} · {formatTime(next.scheduledAt)}
+                </span>
+                <span className="ml-auto text-[11px] font-bold text-muted">{filteredQueue.length} active tickets</span>
+              </>
+            );
+          })()}
+        </div>
+      )}
+
       {/* Main View Display */}
       {isLoading ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -280,7 +405,7 @@ export function StaffQueuePage() {
         />
       ) : viewMode === "kanban" ? (
         /* KDS Kanban Rail View */
-        <div className="grid gap-4 md:grid-cols-4 items-start">
+        <div className="grid gap-4 lg:grid-cols-3 2xl:grid-cols-5 items-start">
           {kanbanColumns.map((col) => {
             const colOrders = filteredQueue.filter((o) => col.statuses.includes(o.status));
             return (
@@ -295,6 +420,7 @@ export function StaffQueuePage() {
                 <div className="space-y-3">
                   {colOrders.map((order) => {
                     const action = getNextAction(order);
+                    const late = new Date(order.scheduledAt).getTime() < Date.now();
                     return (
                       <Card key={order.id} className="p-3.5 space-y-2 bg-paper shadow-sm hover:shadow-md transition">
                         <div className="flex items-center justify-between">
@@ -312,8 +438,13 @@ export function StaffQueuePage() {
                           ))}
                         </div>
                         <div className="flex items-center justify-between pt-1 border-t border-line/60">
-                          <span className="text-[10px] text-muted flex items-center gap-1">
-                            <Clock className="h-3 w-3" /> {formatTime(order.scheduledAt)}
+                          <span
+                            className={`text-[10px] font-bold flex items-center gap-1 ${late ? "text-red-600" : "text-muted"}`}
+                            title={formatDateTime(order.scheduledAt)}
+                          >
+                            <CalendarClock className="h-3 w-3" />
+                            {slotDayLabel(order.scheduledAt)} · {formatTime(order.scheduledAt)}
+                            {late && <AlertTriangle className="h-3 w-3" />}
                           </span>
                           <div className="flex gap-1">
                             <button
@@ -358,17 +489,39 @@ export function StaffQueuePage() {
           })}
         </div>
       ) : (
-        /* Regular Ticket Grid View */
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {filteredQueue.map((order) => {
+        /* Quick Order Queue — tickets grouped by scheduled day, then by roasting-shift band */
+        <div className="space-y-8">
+          {ticketSections.map((section) => (
+            <div key={section.key} className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2.5 rounded-2xl border border-line bg-paper px-3.5 py-2 shadow-xs">
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-ink">
+                  <CalendarClock className="h-3.5 w-3.5 text-roast" />
+                  {slotDayLabel(section.orders[0].scheduledAt)} · {formatDateLong(section.orders[0].scheduledAt)}
+                </span>
+                <span className="h-3.5 w-px bg-line" />
+                <span className={`inline-flex items-center gap-1.5 text-[11px] font-bold ${section.bandColor}`}>
+                  {section.bandLabel}
+                </span>
+                <span className="ml-auto rounded-full bg-cream px-2 py-0.5 text-[10px] font-bold text-muted border border-line">
+                  {section.orders.length} ticket{section.orders.length === 1 ? "" : "s"}
+                </span>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {section.orders.map((order) => {
             const isDelivery = order.type === "DELIVERY";
             const action = getNextAction(order);
             const isUrgent = order.priority === "URGENT" || order.status === "UNCLAIMED";
             const isHigh = order.priority === "HIGH";
+            const late = new Date(order.scheduledAt).getTime() < Date.now();
 
             return (
-              <Card
+              <motion.div
                 key={order.id}
+                layout={!reducedMotion}
+                transition={reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 320, damping: 34 }}
+              >
+              <Card
                 className={`flex flex-col justify-between p-5 transition shadow-sm hover:shadow-md ${
                   isUrgent
                     ? "border-2 border-red-500 bg-red-50/30"
@@ -413,10 +566,26 @@ export function StaffQueuePage() {
                         {isDelivery ? <Truck className="h-3.5 w-3.5 text-roast" /> : <Store className="h-3.5 w-3.5 text-roast" />}
                         <span>{isDelivery ? "Delivery in Tupi" : "Store Counter Pickup"}</span>
                       </span>
-                      <span className="flex items-center gap-1 font-bold text-ink">
+                      <span className="flex items-center gap-1 font-bold text-ink" title={formatDateTime(order.scheduledAt)}>
                         <Clock className="h-3.5 w-3.5 text-muted" />
-                        Target: {formatTime(order.scheduledAt)}
+                        {slotDayLabel(order.scheduledAt)} · {formatTime(order.scheduledAt)}
                       </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-bold ${
+                          late ? "bg-red-100 text-red-700 border border-red-300" : "bg-cream text-muted border border-line"
+                        }`}
+                      >
+                        <Timer className={`h-3 w-3 ${late ? "animate-pulse" : ""}`} />
+                        {late ? `${countdownLabel(order.scheduledAt).replace("in ", "")} past slot` : `Claim in ${countdownLabel(order.scheduledAt).replace("in ", "")}`}
+                      </span>
+                      {prepRank(order) === 0 && (
+                        <span className="inline-flex items-center gap-1 rounded-lg bg-red-600 px-2 py-1 text-[10px] font-black uppercase text-white animate-pulse">
+                          <AlertTriangle className="h-3 w-3" /> Release stock or call customer
+                        </span>
+                      )}
                     </div>
 
                     {/* Items List */}
@@ -509,8 +678,12 @@ export function StaffQueuePage() {
                   ) : null}
                 </div>
               </Card>
+              </motion.div>
             );
-          })}
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 

@@ -53,3 +53,8 @@ export const history = asyncHandler(async (req, res) => {
   const data = await orderService.listHistory(req.params.id, req.user);
   ok(res, data);
 });
+
+export const auditLog = asyncHandler(async (req, res) => {
+  const data = await orderService.recentHistory(req.query.limit);
+  ok(res, data);
+});

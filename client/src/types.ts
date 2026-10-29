@@ -68,6 +68,8 @@ export type Order = {
   priority: "NORMAL" | "HIGH" | "URGENT";
   scheduledAt: string;
   autoCancelAt?: string | null;
+  readyAt?: string | null;
+  unclaimedAt?: string | null;
   subtotal: number;
   deliveryFee: number;
   total: number;
@@ -92,13 +94,24 @@ export type HistoryEntry = {
   createdAt: string;
 };
 
+export type AuditEntry = HistoryEntry & {
+  orderId: string;
+  order?: { id: string; orderNumber: string; status: OrderStatus; scheduledAt: string; type: OrderType } | null;
+};
+
 export type Alert = {
   id: string;
   type: string;
   status: string;
   message: string;
   createdAt: string;
-  order?: { orderNumber?: string; customer?: { name: string; phone?: string | null }; items?: OrderItem[] } | null;
+  order?: {
+    orderNumber?: string;
+    scheduledAt?: string;
+    readyAt?: string;
+    customer?: { name: string; phone?: string | null };
+    items?: OrderItem[];
+  } | null;
   acknowledgedBy?: { name: string } | null;
 };
 
