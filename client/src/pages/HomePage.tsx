@@ -178,6 +178,8 @@ export function HomePage() {
                   alt="Boytag's Whole Lechon Manok - Charcoal roasted chicken with golden skin"
                   className="h-full w-full object-cover transition duration-500 hover:scale-105"
                   fallbackSrc="/images/whole-lechon-manok.jpg"
+                  loading="eager"
+                  fetchPriority="high"
                 />
                 <span className="absolute top-3 left-3 rounded-full bg-roast px-3 py-1 text-xs font-bold text-white shadow-md">
                   ★ Bestseller • Signature Roast
@@ -256,6 +258,7 @@ export function HomePage() {
                       alt={product.name}
                       className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                       fallbackSrc="/images/whole-lechon-manok.jpg"
+                      loading="eager"
                     />
 
                     {/* Curated Bestseller Badge */}

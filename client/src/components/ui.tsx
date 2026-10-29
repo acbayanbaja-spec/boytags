@@ -1,6 +1,6 @@
 import { motion, AnimatePresence, type HTMLMotionProps } from "framer-motion";
 import { Loader2, X, Star, Printer, CheckCircle2, Volume2, VolumeX, ShieldCheck, Flame } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useRef, useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { sound } from "@/lib/sound";
 import { STATUS_LABEL, type OrderStatus } from "@/types";
@@ -298,34 +298,37 @@ export function SafeImage({
 }: React.ImgHTMLAttributes<HTMLImageElement> & { fallbackSrc?: string }) {
   const [failed, setFailed] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+
+  const imgSrc = failed ? fallbackSrc : src || fallbackSrc;
 
   useEffect(() => {
     setFailed(false);
     setLoaded(false);
   }, [src, fallbackSrc]);
 
-  const imgSrc = failed ? fallbackSrc : src || fallbackSrc;
+  // A cached image never re-fires "load" after an in-app navigation, so read completeness directly.
+  useEffect(() => {
+    const node = imgRef.current;
+    if (node?.complete && node.naturalWidth > 0) setLoaded(true);
+  }, [imgSrc, loaded]);
 
   return (
     <div className={cn("relative overflow-hidden bg-cream/70", className)}>
       {!loaded && (
         <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-cream via-line/40 to-cream" />
       )}
+      {/* The image is never opacity-gated: the skeleton sits behind it, so a missed load event
+          can leave a placeholder showing but can never hide a picture that already decoded. */}
       <img
-        key={imgSrc}
+        ref={imgRef}
         src={imgSrc}
         alt={alt}
         loading="lazy"
         decoding="async"
         onLoad={() => setLoaded(true)}
-        onError={() => {
-          if (!failed) setFailed(true);
-          else setLoaded(true);
-        }}
-        className={cn(
-          "relative h-full w-full object-cover transition-opacity duration-300",
-          loaded ? "opacity-100" : "opacity-0",
-        )}
+        onError={() => setFailed(true)}
+        className="relative h-full w-full object-cover"
         {...props}
       />
     </div>
