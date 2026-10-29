@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
-import { reconcileCart, type CartCustomization, type CartItem } from "@/lib/cartReconciliation";
+import { reconcileCart, isLiveProductId, type CartCustomization, type CartItem } from "@/lib/cartReconciliation";
 import type { Product } from "@/types";
 
 type CartContextValue = {
@@ -32,20 +32,23 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, [items]);
 
   // A cart saved while the menu was served from the offline demo store holds ids like "prod_whole",
-  // which the live kitchen rejects. Re-point them at the real dishes by slug before checkout.
+  // which the live kitchen rejects. Re-point them at the real dishes by slug, retrying the catalog
+  // until it answers with genuine products — the backend can still be cold on the first request.
+  const needsRepair = items.some((item) => !isLiveProductId(item.product?.id));
   const { data: catalog } = useQuery<Product[]>({
     queryKey: ["products"],
     queryFn: () => api<Product[]>("/api/products"),
+    refetchInterval: needsRepair ? 4000 : false,
   });
 
   useEffect(() => {
-    if (!catalog?.length) return;
+    if (!needsRepair || !catalog?.length) return;
     const { items: repaired, dropped } = reconcileCart(items, catalog);
+    if (repaired !== items) setItems(repaired);
     if (dropped.length) {
       toast.error(`${dropped.join(", ")} ${dropped.length === 1 ? "is" : "are"} no longer on the menu and were removed from your cart.`);
     }
-    if (repaired !== items) setItems(repaired);
-  }, [catalog, items]);
+  }, [catalog, items, needsRepair]);
 
   const value = useMemo<CartContextValue>(() => {
     const add = (product: Product, quantity = 1, customization?: CartCustomization) => {

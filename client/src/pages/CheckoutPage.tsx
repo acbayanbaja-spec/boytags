@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
+import { isLiveProductId } from "@/lib/cartReconciliation";
 import { api } from "@/lib/api";
 import { formatPeso, formatDateLong, STORE_OPEN, STORE_CLOSE } from "@/lib/utils";
 import { sound } from "@/lib/sound";
@@ -46,6 +48,7 @@ function minutesOf(timeStr: string) {
 export function CheckoutPage() {
   const { user } = useAuth();
   const { items, subtotal, clear } = useCart();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
 
   const [orderType, setOrderType] = useState<OrderType>("DELIVERY");
@@ -116,6 +119,17 @@ export function CheckoutPage() {
 
     if (items.length === 0) {
       setError("Your cart is empty.");
+      return;
+    }
+
+    // Cart lines from the offline demo menu carry placeholder ids the kitchen cannot match. Nudge a
+    // catalog refresh so CartContext can re-point them, rather than firing a request that must fail.
+    const stale = items.filter((i) => !isLiveProductId(i.product?.id));
+    if (stale.length) {
+      void queryClient.invalidateQueries({ queryKey: ["products"] });
+      setError(
+        `${stale.map((i) => i.product.name).join(", ")} ${stale.length === 1 ? "is" : "are"} still linked to an offline copy of the menu. The live menu is reloading — give it a couple of seconds, then place the order again.`,
+      );
       return;
     }
 
