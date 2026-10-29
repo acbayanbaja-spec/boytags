@@ -1,8 +1,7 @@
-import { Prisma } from "@prisma/client";
 import { prisma } from "../config/db.js";
 import { AppError } from "../utils/http.js";
-import { computePriority } from "../utils/orderNumber.js";
 import { notifyStaff, notifyUser } from "./notificationService.js";
+import { TX_OPTIONS } from "./orderService.js";
 import { realtime } from "../realtime/hub.js";
 import { logger } from "../utils/logger.js";
 
@@ -100,7 +99,7 @@ export async function processUnclaimedOrders() {
         });
       }
       return next;
-    });
+    }, TX_OPTIONS);
 
     await notifyStaff({
       type: "UNCLAIMED",
@@ -129,13 +128,28 @@ export async function processUnclaimedOrders() {
     void updated;
   }
 
-  const active = await prisma.order.findMany({ where: { status: { in: ["PENDING", "CONFIRMED", "PREPARING", "READY", "OUT_FOR_DELIVERY"] } } });
-  for (const order of active) {
-    const priority = computePriority(order);
-    if (priority !== order.priority) {
-      await prisma.order.update({ where: { id: order.id }, data: { priority } });
-    }
-  }
+  // Same rule computePriority applies to a single order, expressed as four set statements. The old
+  // version read every open order and wrote back the changed ones one at a time, which on a slow
+  // link kept a sweep running long enough to overlap the next one.
+  const now = new Date();
+  const soon = new Date(now.getTime() + 30 * 60 * 1000);
+  const inFlight = { status: { notIn: ["COMPLETED", "CANCELLED", "UNCLAIMED"] } };
+  await prisma.order.updateMany({
+    where: { ...inFlight, priority: { not: "URGENT" }, scheduledAt: { lt: now } },
+    data: { priority: "URGENT" },
+  });
+  await prisma.order.updateMany({
+    where: { ...inFlight, priority: { not: "HIGH" }, scheduledAt: { gte: now, lte: soon } },
+    data: { priority: "HIGH" },
+  });
+  await prisma.order.updateMany({
+    where: { ...inFlight, priority: { not: "NORMAL" }, scheduledAt: { gt: soon } },
+    data: { priority: "NORMAL" },
+  });
+  await prisma.order.updateMany({
+    where: { status: "UNCLAIMED", priority: { not: "URGENT" } },
+    data: { priority: "URGENT" },
+  });
 
   return { scanned: candidates.length, marked };
 }
@@ -205,7 +219,7 @@ export async function processExpiredOrders() {
           data: { type: "UNCLAIMED_ORDER", message: `Expired order ${order.orderNumber} auto-cancelled.`, orderId: order.id },
         });
       }
-    });
+    }, TX_OPTIONS);
 
     await notifyUser({
       userId: order.customerId,
@@ -237,13 +251,24 @@ export async function processExpiredOrders() {
 }
 
 export function startUnclaimedJob(intervalMs) {
+  let busy = false;
   const run = async () => {
+    // Both sweeps walk open orders, so on a slow remote link one can outlive the interval. Runs used
+    // to overlap freely, and every one of them holds a pooled connection — which is how checkout
+    // ended up unable to start its own transaction (P2028).
+    if (busy) {
+      logger.warn("Sweep skipped: the previous run is still working");
+      return;
+    }
+    busy = true;
     try {
       await processExpiredOrders();
+      await processUnclaimedOrders();
     } catch (error) {
-      logger.error("Expiry job failed", { message: error.message });
+      logger.error("Sweep job failed", { message: error.message });
+    } finally {
+      busy = false;
     }
-    processUnclaimedOrders().catch((error) => logger.error("Unclaimed job failed", { message: error.message }));
   };
   run();
   return setInterval(run, intervalMs);

@@ -19,6 +19,16 @@ function money(value) {
 const DEFAULT_AUTO_CANCEL_GRACE_MINUTES = 15;
 const MAX_SCHEDULE_AHEAD_MS = 7 * 24 * 60 * 60 * 1000;
 
+/** Prisma's 5s interactive-transaction ceiling is measured against the database, not the work: an
+ *  order write is a dozen sequential round trips to a remote Postgres, and a merely slow link used
+ *  to roll the whole thing back as P2028. The wait for a pooled connection gets the same margin. */
+export const TX_OPTIONS = { timeout: 20000, maxWait: 10000 };
+
+/** Every order write goes through here so no transaction inherits the 5s default. */
+function transaction(work) {
+  return prisma.$transaction(work, TX_OPTIONS);
+}
+
 function graceMinutes(settings) {
   return settings?.autoCancelGraceMinutes ?? DEFAULT_AUTO_CANCEL_GRACE_MINUTES;
 }
@@ -84,9 +94,9 @@ async function raiseAlertOnce(tx, { type, productId, message }) {
   await tx.alert.create({ data: { type, message, productId } });
 }
 
-async function applyInventory(tx, items, direction) {
-  const settings = await tx.setting.findUnique({ where: { id: "default" } });
-  const lowStockThreshold = settings?.lowStockThreshold ?? 0;
+/** `lowStockThreshold` is passed in rather than read here: this runs inside the order transaction,
+ *  and every extra query is another round trip against that transaction's clock. */
+async function applyInventory(tx, items, direction, lowStockThreshold = 0) {
   for (const item of items) {
     let product;
     if (direction === "decrement") {
@@ -200,9 +210,9 @@ export async function createOrder(customer, input) {
     throw new AppError("Orders can only be scheduled up to 7 days ahead.", 422, "INVALID_SCHEDULE");
   }
 
-  const order = await prisma.$transaction(async (tx) => {
+  const order = await transaction(async (tx) => {
     const lines = await hydrateItems(tx, input.items);
-    await applyInventory(tx, lines, "decrement");
+    await applyInventory(tx, lines, "decrement", settings?.lowStockThreshold ?? 0);
     const subtotal = lines.reduce((sum, line) => sum + Number(line.lineTotal), 0);
     const deliveryFee = input.type === "DELIVERY" ? Number(settings?.deliveryFee || 0) : 0;
     const created = await tx.order.create({
@@ -261,6 +271,9 @@ export async function createOrder(customer, input) {
       },
     });
     realtime.broadcast({ type: "order", audience: "staff", orderId: order.id });
+    // Stock moved with this order, so every open menu and kitchen board has to re-read it. Without
+    // this a dish that sold out at checkout stays clickable until the tab happens to refetch.
+    realtime.broadcast({ type: "inventory", audience: "all" });
   } catch (error) {
     logger.error("Order saved but the kitchen notification failed", {
       orderId: order.id,
@@ -343,7 +356,7 @@ export async function updateStatus(id, status, actor) {
   if (!current) throw new AppError("Order not found.", 404, "NOT_FOUND");
   assertTransition(current.status, status, { type: current.type, actorRole: actor.role });
 
-  const updated = await prisma.$transaction(async (tx) => {
+  const updated = await transaction(async (tx) => {
     const data = {
       status,
       priority: computePriority({ ...current, status }),
@@ -413,7 +426,7 @@ export async function completeByCustomer(id, actor) {
     throw new AppError("Order cannot be marked complete at its current stage.", 400, "INVALID_TRANSITION");
   }
 
-  const updated = await prisma.$transaction(async (tx) => {
+  const updated = await transaction(async (tx) => {
     const data = { status: "COMPLETED", priority: "NORMAL" };
     const next = await tx.order.update({
       where: { id },
@@ -507,7 +520,7 @@ export async function cancelOrder(id, actor, reason) {
   }
   assertTransition(current.status, "CANCELLED", { type: current.type, actorRole: actor.role === "CUSTOMER" ? "STAFF" : actor.role });
 
-  const updated = await prisma.$transaction(async (tx) => {
+  const updated = await transaction(async (tx) => {
     await applyInventory(tx, current.items, "increment");
     const next = await tx.order.update({
       where: { id },
@@ -555,13 +568,13 @@ export async function updateOrder(id, actor, input) {
   }
 
   const settings = await prisma.setting.findUnique({ where: { id: "default" } });
-  const updated = await prisma.$transaction(async (tx) => {
+  const updated = await transaction(async (tx) => {
     const changes = [];
     let lines = current.items;
     if (input.items) {
       await applyInventory(tx, current.items, "increment");
       lines = await hydrateItems(tx, input.items);
-      await applyInventory(tx, lines, "decrement");
+      await applyInventory(tx, lines, "decrement", settings?.lowStockThreshold ?? 0);
       await tx.orderItem.deleteMany({ where: { orderId: id } });
       await tx.orderItem.createMany({ data: lines.map((line) => ({ ...line, orderId: id })) });
       changes.push({ field: "items" });

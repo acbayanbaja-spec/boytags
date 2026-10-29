@@ -1,10 +1,12 @@
 import { prisma } from "../config/db.js";
 
 /** Runs on the caller's client. Inside a transaction it must receive `tx`, otherwise Prisma opens a
- *  second pooled connection while the transaction is holding one. */
+ *  second pooled connection while the transaction is holding one.
+ *  Ordered by the unique number rather than by createdAt: createdAt has no leading index, so the old
+ *  read scanned and sorted the whole table inside the order transaction. */
 export async function nextOrderNumber(client = prisma) {
   const last = await client.order.findFirst({
-    orderBy: { createdAt: "desc" },
+    orderBy: { orderNumber: "desc" },
     select: { orderNumber: true },
   });
   const n = last?.orderNumber ? Number(last.orderNumber.replace("BT-", "")) : 1000;
